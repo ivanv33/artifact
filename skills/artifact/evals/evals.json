@@ -1,0 +1,65 @@
+{
+  "skill_name": "artifact",
+  "evals": [
+    {
+      "id": 1,
+      "name": "create-single-artifact",
+      "prompt": "I just fetched NYC apartment listings from StreetEasy for zip 11206. There are 47 listings in a CSV with columns: address, price, sqft, bedrooms, bathrooms, date_listed. Save this as an artifact.",
+      "command": "create",
+      "assertions": [
+        "Has ARTIFACT.md with YAML frontmatter (name, params, outputs)",
+        "Uses numeric DIKW prefix (0x for data)",
+        "Outputs in out/<date>/ directory",
+        "Sidecar .md with params, timestamp, model, sha256, generation log",
+        "Recipe body has Goal/Steps/Output/Output Log Format sections",
+        "Passes Lego Test (generic name, specifics in params)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "plan-buy-vs-rent",
+      "prompt": "I want to figure out if it's cheaper to buy or rent in Bushwick right now. Plan the artifacts I'd need.",
+      "command": "plan",
+      "assertions": [
+        "Produces plan.md only (no artifact dirs, no outputs)",
+        "Steps use 'Run @artifact-dir — <why>' format",
+        "Each step has Params, Inputs (@refs or none), Output (@ref + description)",
+        "Uses numeric DIKW prefixes (00-, 10-, 20-, 30-)",
+        "Artifacts pass Lego Test (generic names, specifics in params)",
+        "DIKW layers used correctly (data=raw facts, info=reusable derivative, knowledge=analysis scripts, wisdom=decisions)",
+        "Info layer only used when derivative is independently reusable"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "plan-artifacts-buy-vs-rent",
+      "prompt": "Take the buy-vs-rent plan and create all artifacts from it.",
+      "command": "plan-artifacts",
+      "prerequisites": "Run eval 2 first to produce the plan.md",
+      "assertions": [
+        "Produces plan-artifacts.md with self-contained paragraph per artifact",
+        "Inputs described abstractly (no @ wiring to specific artifacts)",
+        "Each paragraph has enough context to generate ARTIFACT.md independently",
+        "Scaffolds all artifact dirs with ARTIFACT.md (YAML frontmatter + recipe body)",
+        "Does NOT produce out/<date>/ outputs",
+        "Updates plan.md with Status section"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "full-pipeline-passover-rain",
+      "prompt": "Is it always rainy on Passover in NYC?",
+      "command": "plan + plan-artifacts + create",
+      "assertions": [
+        "Correct 2-artifact decomposition: 00-weather (generic data) + 20-verdict (knowledge script)",
+        "No unnecessary info layer (tagging/stats inside knowledge script)",
+        "Data artifact is generic (00-weather, not 00-passover-weather)",
+        "Knowledge artifact writes a Python script with PEP 723 inline deps",
+        "Script uses Hebrew calendar lib + statistical test",
+        "All 3 phases complete (plan → scaffold → execute)",
+        "Outputs in out/<date>/ with sidecar .md logs",
+        "Scripts are self-contained (uv run with no external setup)"
+      ]
+    }
+  ]
+}

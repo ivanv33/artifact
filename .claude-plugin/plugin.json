@@ -1,0 +1,7 @@
+{
+  "name": "artifact",
+  "description": "Create and manage reproducible DIKW artifact pipelines. Decompose goals into data/info/knowledge/wisdom artifacts, scaffold them, and execute recipes that produce versioned outputs.",
+  "author": {
+    "name": "Ivan V"
+  }
+}
