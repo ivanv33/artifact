@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "artifact": {
+      "source": {
+        "source": "directory",
+        "path": "/home/user/artifact"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "artifact@artifact": true
+  }
+}
