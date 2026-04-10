@@ -1,6 +1,7 @@
 ---
 name: artifact-create
 description: "Create a single reproducible artifact: write ARTIFACT.md recipe. Use when user says 'save as artifact', 'make this reproducible', '/artifact create', or when called by artifact-plan-artifacts for each plan step."
+user-invocable: true
 ---
 
 # artifact-create
@@ -14,9 +15,11 @@ Read the parent skill at `../SKILL.md` for artifact structure, DIKW prefixes, an
 - User says "save as artifact" or "make this reproducible"
 - The session produced a valuable output worth persisting
 
-## Design principle: Entities, not Tasks
+## Design principle: Self-contained and generic
 
-Design artifacts around **entities** (the "what") rather than tasks (the "how"). Apply the **Lego Test**: each artifact must be a generic primitive, reusable beyond this specific question. Specifics go in params.
+Each artifact must be **self-contained** — it describes what kind of inputs it expects (shape, format, columns), never where those inputs come from. No `@` references to other artifacts in ARTIFACT.md. Wiring (which artifact feeds which) lives in the plan file, not in individual artifacts.
+
+Apply the **Lego Test**: each artifact is a generic primitive, reusable beyond the specific question that spawned it. Specifics go in params.
 
 ## Agent workflow
 
@@ -81,15 +84,41 @@ The sidecar `streeteasy_listings.md` must have:
   - Data quality notes (missing fields, outliers filtered, etc.)
 ```
 
-For artifacts with upstream inputs, add `inputs:` to the frontmatter:
+For artifacts with upstream inputs, add `inputs:` to the frontmatter. Keys are **filenames only** (no paths), values describe what shape of data is expected:
 
 ```yaml
 inputs:
   daily_weather.csv:
-    desc: "Historical weather data, shape: [date, precipitation_mm, ...]"
+    desc: "Historical daily weather — columns: date, precipitation_mm, high_f, low_f, conditions"
 ```
 
-And reference them in steps with `@` syntax: `@00-daily-weather/out/<date>/daily_weather.csv`
+Steps reference inputs generically (e.g., "Read the daily weather input") — never use `@` references to specific artifacts. The plan file handles wiring.
+
+**Anti-pattern — leaking wiring into the artifact:**
+
+```yaml
+# BAD: input desc is vague, doesn't describe expected shape
+inputs:
+  company-criteria.md:
+    desc: "Selection criteria with tier definitions, inclusion/exclusion rules"
+```
+```markdown
+# BAD: step references a specific artifact path
+1. Read `@00-company-criteria/out/<date>/company-criteria.md` for tier definitions.
+```
+
+```yaml
+# GOOD: filename only, desc says what it expects
+inputs:
+  company-criteria.md:
+    desc: "Company selection criteria — tier definitions, sector coverage, inclusion/exclusion rules"
+```
+```markdown
+# GOOD: step references input by name, no path
+1. Read company-criteria.md for tier definitions and inclusion/exclusion rules.
+```
+
+The artifact doesn't know or care where the criteria came from. It just needs a file called `company-criteria.md` with selection criteria.
 
 **Prefer ARTIFACT.md over scripts.** Only create `scripts/` when you need deterministic, repeatable execution. When you do create scripts:
 

@@ -1,6 +1,7 @@
 ---
 name: artifact-plan-artifacts
 description: "Take an existing plan.md and scaffold all artifact directories with ARTIFACT.md recipes (no outputs). Use when user says 'create artifacts from this plan', 'scaffold the plan', or after /artifact plan has produced a plan.md file. Does NOT execute recipes — use /artifact create for that."
+user-invocable: true
 ---
 
 # artifact-plan-artifacts
@@ -71,5 +72,5 @@ Scaffolded 6 artifacts:
   [5/6] 20-buy-vs-rent-analysis/ARTIFACT.md    ✓
   [6/6] 30-housing-decision/ARTIFACT.md        ✓
 
-Run @bushwick-buy-vs-rent-plan.md` to execute individual artifacts.
+Run @bushwick-buy-vs-rent-plan.md to execute individual artifacts.
 ```

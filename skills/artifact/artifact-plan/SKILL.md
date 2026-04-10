@@ -1,6 +1,7 @@
 ---
 name: artifact-plan
 description: "Decompose an ambiguous objective into a DAG of reusable DIKW artifacts and write an executable plan.md file. Use when user says 'plan artifacts for X', has a broad goal needing decomposition, or wants to design an artifact chain before creating anything. This command produces the plan only — it does NOT create artifact directories or outputs."
+user-invocable: true
 ---
 
 # artifact-plan

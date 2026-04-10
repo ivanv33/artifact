@@ -1,6 +1,8 @@
 ---
 name: artifact
 description: "Create and manage reproducible DIKW artifacts. Three commands: /artifact plan (decompose a goal into an artifact DAG and write an executable plan.md), /artifact plan-artifacts (take a plan.md and create all artifacts with outputs), /artifact create (create a single artifact with ARTIFACT.md recipe and out/<date>/ outputs). Use this skill whenever the user says /artifact, 'save as artifact', 'make this reproducible', 'plan artifacts for X', or references artifacts, ARTIFACT.md, the DIKW system, or artifact pipelines."
+user-invocable: true
+argument-hint: "<plan|plan-artifacts|create> [goal or artifact name]"
 ---
 
 # Artifact Manager
@@ -69,7 +71,7 @@ outputs:
 
 **Body sections:**
 - `# Goal` — what and why
-- `# Steps` — numbered list, reference `@artifact/out/<date>/file` for inputs
+- `# Steps` — numbered list describing how to produce the output. Reference inputs by filename only — no `@` paths (wiring lives in plan files)
 - `# Output` — list files to create in `out/<date>/`, including the sidecar `.md`
 - `# Output Log Format` — what the sidecar should contain
 
@@ -80,7 +82,7 @@ Reference another artifact's output: `@<artifact-dir>/out/<date>/filename`
 - `@00-daily-weather/out/<date>/daily_weather.csv`
 - `<date>` = a specific date like `2026-04-08`
 
-Used in ARTIFACT.md steps and in plan files to wire artifacts together.
+Used in **plan files** to wire artifacts together. Never in ARTIFACT.md — artifacts are self-contained.
 
 ## Output Sidecar
 
