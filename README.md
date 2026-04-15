@@ -24,11 +24,13 @@ Turns chat sessions into reproducible, composable artifacts organized by the DIK
 ```
 00-weather/
 ├── ARTIFACT.md          # Recipe: YAML frontmatter + markdown prompt
+├── .gitignore           # out/* except out/latest  (out/latest is never created by the skill)
 ├── scripts/             # Optional: self-contained Python/shell helpers
 └── out/
     └── 2026-04-08/
-        ├── daily_weather.csv    # The artifact
-        └── daily_weather.md     # Sidecar: params + generation log
+        ├── daily_weather.csv           # The artifact
+        └── receipts/
+            └── daily_weather.csv.md    # Receipt: params + generation log + artifact_sha
 ```
 
 ## Install as Claude Code plugin

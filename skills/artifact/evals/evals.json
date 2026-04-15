@@ -8,11 +8,14 @@
       "command": "create",
       "assertions": [
         "Has ARTIFACT.md with YAML frontmatter (name, params, outputs)",
-        "Uses numeric DIKW prefix (0x for data)",
+        "Uses numeric DIKW prefix (0- for data)",
         "Outputs in out/<date>/ directory",
-        "Sidecar .md with params, timestamp, model, sha256, generation log",
+        "Artifact root contains a .gitignore with 'out/*' + '!out/latest' (out/latest itself is NOT created by the skill — it's just reserved in the ignore rule)",
+        "Receipt written to out/<date>/receipts/<output>.<ext>.md (e.g. out/<date>/receipts/streeteasy_listings.csv.md, NOT streeteasy_listings.md) with frontmatter: timestamp, model, params, artifact_sha (git hash-object of ARTIFACT.md)",
+        "Receipt body contains a generation log (source, row count, errors/notes)",
         "Recipe body has Goal/Steps/Output/Output Log Format sections",
-        "Passes Lego Test (generic name, specifics in params)"
+        "Passes Lego Test (generic name, specifics in params)",
+        "params: contains only genuinely variable values (e.g. zip_code) — no padding with hardcoded thresholds"
       ]
     },
     {
@@ -24,7 +27,7 @@
         "Produces plan.md only (no artifact dirs, no outputs)",
         "Steps use 'Run @artifact-dir — <why>' format",
         "Each step has Params, Inputs (@refs or none), Output (@ref + description)",
-        "Uses numeric DIKW prefixes (00-, 10-, 20-, 30-)",
+        "Uses numeric DIKW prefixes (0-, 1-, 2-, 3-)",
         "Artifacts pass Lego Test (generic names, specifics in params)",
         "DIKW layers used correctly (data=raw facts, info=reusable derivative, knowledge=analysis scripts, wisdom=decisions)",
         "Info layer only used when derivative is independently reusable"
@@ -32,33 +35,41 @@
     },
     {
       "id": 3,
-      "name": "plan-artifacts-buy-vs-rent",
+      "name": "create-plan-artifacts-buy-vs-rent",
       "prompt": "Take the buy-vs-rent plan and create all artifacts from it.",
-      "command": "plan-artifacts",
+      "command": "create-plan-artifacts",
       "prerequisites": "Run eval 2 first to produce the plan.md",
       "assertions": [
-        "Produces plan-artifacts.md with self-contained paragraph per artifact",
+        "Produces create-plan-artifacts.md with self-contained paragraph per artifact",
         "Inputs described abstractly (no @ wiring to specific artifacts)",
         "Each paragraph has enough context to generate ARTIFACT.md independently",
         "Scaffolds all artifact dirs with ARTIFACT.md (YAML frontmatter + recipe body)",
         "Does NOT produce out/<date>/ outputs",
-        "Updates plan.md with Status section"
+        "Does NOT create a runs/ directory or any run file — run files exist only when the plan itself is executed (by prompting Claude with @<plan>.md), which is outside this skill. Verify `runs/` does not exist and no `*-run.md` files were written.",
+        "Updates plan.md with a Status section listing the scaffolded artifact dirs (must NOT point to a run file, since none was created)"
       ]
     },
     {
       "id": 4,
       "name": "full-pipeline-passover-rain",
       "prompt": "Is it always rainy on Passover in NYC?",
-      "command": "plan + plan-artifacts + create",
+      "command": "plan + create-plan-artifacts + run-plan",
+      "procedure": "Phase 1: /artifact plan on the prompt → passover-rain-plan.md. Phase 2: /artifact create-plan-artifacts → scaffold 0-weather/ and 2-passover-rain-verdict/. Phase 3 (run-plan): invoke a subagent with the prompt 'Read @passover-rain-plan.md and execute it end-to-end.' The subagent follows the plan's own `## Run file` instructions, calling /artifact create for each step and maintaining runs/<YYYY-MM-DD-HHMM>-passover-rain-run.md. There is no /artifact run subcommand — phase 3 is the subagent reading the plan by @-reference.",
       "assertions": [
-        "Correct 2-artifact decomposition: 00-weather (generic data) + 20-verdict (knowledge script)",
+        "Correct 2-artifact decomposition: 0-weather (generic data) + 2-verdict (knowledge script)",
         "No unnecessary info layer (tagging/stats inside knowledge script)",
-        "Data artifact is generic (00-weather, not 00-passover-weather)",
+        "Data artifact is generic (0-weather, not 0-passover-weather)",
         "Knowledge artifact writes a Python script with PEP 723 inline deps",
         "Script uses Hebrew calendar lib + statistical test",
-        "All 3 phases complete (plan → scaffold → execute)",
-        "Outputs in out/<date>/ with sidecar .md logs",
-        "Scripts are self-contained (uv run with no external setup)"
+        "All 3 phases complete (plan → scaffold → run-plan via subagent prompted with @passover-rain-plan.md)",
+        "Outputs in 0-weather/out/<date>/ and 2-passover-rain-verdict/out/<date>/ with receipts under out/<date>/receipts/<output>.<ext>.md (e.g. daily_weather.csv.md, verdict.md.md)",
+        "Each artifact root contains a .gitignore (out/* except out/latest); out/latest itself is NOT created by the skill",
+        "Scripts are self-contained (uv run with no external setup)",
+        "runs/ directory exists at the eval-4 root (sibling to passover-rain-plan.md)",
+        "Exactly one run file matching runs/<YYYY-MM-DD-HHMM>-passover-rain-run.md (local-time timestamp, not UTC)",
+        "Run file frontmatter contains: plan: passover-rain-plan.md; started: ISO 8601 local time; status: completed; plan_sha equal to `git hash-object passover-rain-plan.md`; reused_artifacts: []",
+        "Run file Progress table has 2 rows (0-weather, 2-passover-rain-verdict), both Status=done with matching Output Date column",
+        "Run file ## Log section has two ### entries (one per artifact) appended in execution order — 0-weather before 2-passover-rain-verdict"
       ]
     }
   ]
