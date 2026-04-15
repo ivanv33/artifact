@@ -6,10 +6,12 @@ A Claude Code skill and plugin for creating reproducible DIKW artifact pipelines
 
 Turns chat sessions into reproducible, composable artifacts organized by the DIKW hierarchy:
 
-- **Data (0x)** — Raw facts: downloaded, scraped, imported
-- **Info (1x)** — Derivative of data, still close to truth: filtered, joined, tagged
-- **Knowledge (2x)** — Prediction models built from data/info: scripts that compute stats, find patterns
-- **Wisdom (3x)** — Conclusions using knowledge + info + data: actionable decisions
+Artifacts use double-digit numeric prefixes — the first digit marks the DIKW tier, the second digit orders artifacts within that tier (e.g. `00-`, `01-`, ..., `09-`, `10-`, ...).
+
+- **Data (`00-` through `09-`)** — Raw facts: downloaded, scraped, imported
+- **Info (`10-` through `19-`)** — Derivative of data, still close to truth: filtered, joined, tagged
+- **Knowledge (`20-` through `29-`)** — Prediction models built from data/info: scripts that compute stats, find patterns
+- **Wisdom (`30-` through `39-`)** — Conclusions using knowledge + info + data: actionable decisions
 
 ## Three commands
 
