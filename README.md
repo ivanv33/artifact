@@ -16,7 +16,7 @@ Turns chat sessions into reproducible, composable artifacts organized by the DIK
 | Command | What it does |
 |---------|-------------|
 | `/artifact plan` | Decompose a goal into an artifact DAG, produce an executable plan.md |
-| `/artifact plan-artifacts` | Take a plan.md, scaffold all artifact dirs with ARTIFACT.md recipes |
+| `/artifact create-plan-artifacts` | Take a plan.md, scaffold all artifact dirs with ARTIFACT.md recipes |
 | `/artifact create` | Create a single artifact with outputs |
 
 ## Artifact structure
