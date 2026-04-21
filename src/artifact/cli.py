@@ -23,14 +23,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="Execute one artifact.")
     run.add_argument("artifact_dir")
-    run.add_argument(
-        "--param", action="append", default=[], metavar="NAME=VALUE",
-        help="Set a parameter. May be repeated.",
-    )
-    run.add_argument(
-        "--input", action="append", default=[], metavar="NAME=PATH",
-        help="Map an input name to a file path. May be repeated.",
-    )
+    run.add_argument("--param", action="append", default=[], metavar="NAME=VALUE")
+    run.add_argument("--input", action="append", default=[], metavar="NAME=PATH")
+    run.add_argument("--promote-as", dest="promote_as", default=None, metavar="LABEL")
+
+    promote = sub.add_parser("promote", help="Promote an existing run to a label.")
+    promote.add_argument("artifact_dir")
+    promote.add_argument("run_id")
+    promote.add_argument("--as", dest="label", required=True)
 
     return parser
 
@@ -59,6 +59,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
     Returns:
         The process exit code.
     """
+    from artifact.promote import PromoteError, promote as promote_run
     from artifact.runner import RunnerError, run as run_artifact
 
     parser = build_parser()
@@ -74,10 +75,21 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
                 inputs=inputs,
                 executor=executor or deepagent_executor,
             )
-        except RunnerError as e:
+            if args.promote_as:
+                promote_run(args.artifact_dir, run_dir.name, label=args.promote_as)
+        except (RunnerError, PromoteError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
         print(run_dir)
+        return 0
+
+    if args.cmd == "promote":
+        try:
+            out_path = promote_run(args.artifact_dir, args.run_id, label=args.label)
+        except PromoteError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print(out_path)
         return 0
 
     return 2

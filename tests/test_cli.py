@@ -39,3 +39,20 @@ def test_run_cli_creates_run_dir_via_injected_executor(tmp_path):
     runs = list((art / "runs").iterdir())
     assert len(runs) == 1
     assert (runs[0] / "manifest.json").is_file()
+
+
+def test_run_with_promote_as(tmp_path):
+    import shutil
+
+    from artifact import cli
+
+    fixtures = Path(__file__).parent / "fixtures"
+    art = tmp_path / "trivial"
+    shutil.copytree(fixtures / "trivial", art, ignore=shutil.ignore_patterns("runs", "outs"))
+
+    def stub_executor(*, spec, run_dir, templated_body):
+        (run_dir / "out" / "hello.md").write_text("hi")
+
+    rc = cli.main(["run", str(art), "--promote-as", "alice"], executor=stub_executor)
+    assert rc == 0
+    assert (art / "outs" / "alice" / "out" / "hello.md").is_file()
