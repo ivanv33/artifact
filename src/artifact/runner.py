@@ -1,8 +1,7 @@
 """Orchestrate one run of an artifact.
 
-The runner sequences: parse → resolve params → create run dir → template body
-→ dispatch executor → write manifest. Input staging and output verification
-are added in later stages.
+The runner sequences: parse → resolve params → resolve inputs → create run dir
+→ stage inputs → template body → dispatch executor → verify outputs → write manifest.
 """
 
 from __future__ import annotations
@@ -37,8 +36,9 @@ def run(
     Args:
         artifact_dir: Path to the artifact directory containing ``ARTIFACT.md``.
         params: Explicit param values, by name.
-        inputs: Explicit input file paths, by declared input name. Unused in
-            Stage 3; staged in Stage 4.
+        inputs: Explicit input file paths, by declared input name. Each source
+            file is copied to runs/<id>/in/<name>, SHA-256'd, and its absolute
+            staged path made available to the template as {{ inputs.<name> }}.
         executor: Callable satisfying ``Executor``. Defaults to ``noop_executor``.
         now: Override for the run's timestamp (used for ``run_id`` and manifest
             timestamp). Defaults to wall clock; tests pass a fixed datetime for

@@ -22,21 +22,59 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     run = sub.add_parser("run", help="Execute one artifact.")
-    run.add_argument("artifact_dir")
-    run.add_argument("--param", action="append", default=[], metavar="NAME=VALUE")
-    run.add_argument("--input", action="append", default=[], metavar="NAME=PATH")
-    run.add_argument("--promote-as", dest="promote_as", default=None, metavar="LABEL")
+    run.add_argument(
+        "artifact_dir",
+        help="Path to the artifact directory containing ARTIFACT.md.",
+    )
+    run.add_argument(
+        "--param",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="Set a parameter. May be repeated.",
+    )
+    run.add_argument(
+        "--input",
+        action="append",
+        default=[],
+        metavar="NAME=PATH",
+        help="Map an input name to a file path. May be repeated.",
+    )
+    run.add_argument(
+        "--promote-as",
+        dest="promote_as",
+        default=None,
+        metavar="LABEL",
+        help="Also promote the newly-created run under outs/<LABEL>/.",
+    )
 
     promote = sub.add_parser("promote", help="Promote an existing run to a label.")
-    promote.add_argument("artifact_dir")
-    promote.add_argument("run_id")
-    promote.add_argument("--as", dest="label", required=True)
+    promote.add_argument(
+        "artifact_dir",
+        help="Path to the artifact directory.",
+    )
+    promote.add_argument(
+        "run_id",
+        help="Basename of the run directory under runs/ to promote.",
+    )
+    promote.add_argument(
+        "--as",
+        dest="label",
+        required=True,
+        help="Label name to create under outs/.",
+    )
 
     runs_cmd = sub.add_parser("runs", help="List runs in an artifact.")
-    runs_cmd.add_argument("artifact_dir")
+    runs_cmd.add_argument(
+        "artifact_dir",
+        help="Path to the artifact directory.",
+    )
 
     show_cmd = sub.add_parser("show", help="Show artifact frontmatter + labels.")
-    show_cmd.add_argument("artifact_dir")
+    show_cmd.add_argument(
+        "artifact_dir",
+        help="Path to the artifact directory.",
+    )
 
     return parser
 
@@ -65,8 +103,8 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
     Returns:
         The process exit code.
     """
-    from artifact.promote import PromoteError, promote as promote_run
-    from artifact.runner import RunnerError, run as run_artifact
+    from artifact.promote import promote as promote_run
+    from artifact.runner import run as run_artifact
 
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -83,7 +121,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
             )
             if args.promote_as:
                 promote_run(args.artifact_dir, run_dir.name, label=args.promote_as)
-        except (RunnerError, PromoteError) as e:
+        except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
         print(run_dir)
@@ -92,7 +130,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
     if args.cmd == "promote":
         try:
             out_path = promote_run(args.artifact_dir, args.run_id, label=args.label)
-        except PromoteError as e:
+        except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
         print(out_path)
@@ -104,13 +142,17 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
         for row in list_runs(args.artifact_dir):
             promoted = ",".join(row.promoted_to) or "-"
             params_s = " ".join(f"{k}={v}" for k, v in row.params.items()) or "-"
-            print(f"{row.run_id}\t{promoted}\t{params_s}")
+            print(f"{row.run_id}\t{row.timestamp}\t{promoted}\t{params_s}")
         return 0
 
     if args.cmd == "show":
-        from artifact.introspect import show
+        try:
+            from artifact.introspect import show
 
-        print(show(args.artifact_dir), end="")
+            print(show(args.artifact_dir), end="")
+        except (ValueError, OSError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
         return 0
 
     return 2

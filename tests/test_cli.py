@@ -41,6 +41,27 @@ def test_run_cli_creates_run_dir_via_injected_executor(tmp_path):
     assert (runs[0] / "manifest.json").is_file()
 
 
+def test_run_cli_reports_missing_dir_cleanly(tmp_path, capsys):
+    from artifact.cli import main
+
+    rc = main(["run", str(tmp_path / "does-not-exist")])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ")
+    # The error should NOT contain a Python traceback.
+    assert "Traceback" not in err
+
+
+def test_show_cli_reports_missing_dir_cleanly(tmp_path, capsys):
+    from artifact.cli import main
+
+    rc = main(["show", str(tmp_path / "does-not-exist")])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ")
+    assert "Traceback" not in err
+
+
 def test_run_with_promote_as(tmp_path):
     import shutil
 
