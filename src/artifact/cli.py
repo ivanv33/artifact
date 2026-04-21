@@ -32,6 +32,12 @@ def build_parser() -> argparse.ArgumentParser:
     promote.add_argument("run_id")
     promote.add_argument("--as", dest="label", required=True)
 
+    runs_cmd = sub.add_parser("runs", help="List runs in an artifact.")
+    runs_cmd.add_argument("artifact_dir")
+
+    show_cmd = sub.add_parser("show", help="Show artifact frontmatter + labels.")
+    show_cmd.add_argument("artifact_dir")
+
     return parser
 
 
@@ -90,6 +96,21 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
             print(f"error: {e}", file=sys.stderr)
             return 1
         print(out_path)
+        return 0
+
+    if args.cmd == "runs":
+        from artifact.introspect import list_runs
+
+        for row in list_runs(args.artifact_dir):
+            promoted = ",".join(row.promoted_to) or "-"
+            params_s = " ".join(f"{k}={v}" for k, v in row.params.items()) or "-"
+            print(f"{row.run_id}\t{promoted}\t{params_s}")
+        return 0
+
+    if args.cmd == "show":
+        from artifact.introspect import show
+
+        print(show(args.artifact_dir), end="")
         return 0
 
     return 2
