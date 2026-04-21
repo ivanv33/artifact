@@ -30,6 +30,7 @@ def run(
     params: dict[str, str],
     inputs: dict[str, str],
     executor: Executor | None = None,
+    now: datetime | None = None,
 ) -> Path:
     """Execute one run of an artifact.
 
@@ -39,6 +40,9 @@ def run(
         inputs: Explicit input file paths, by declared input name. Unused in
             Stage 3; staged in Stage 4.
         executor: Callable satisfying ``Executor``. Defaults to ``noop_executor``.
+        now: Override for the run's timestamp (used for ``run_id`` and manifest
+            timestamp). Defaults to wall clock; tests pass a fixed datetime for
+            deterministic run IDs.
 
     Returns:
         The path of the newly created run directory under ``runs/``.
@@ -53,7 +57,8 @@ def run(
     resolved_params = _resolve_params(spec, params)
     input_plan = _resolve_inputs(spec, inputs)
 
-    now = datetime.now().astimezone()
+    if now is None:
+        now = datetime.now().astimezone()
     run_id = make_run_id(now=now)
     run_dir = artifact_dir / "runs" / run_id
     (run_dir / "in").mkdir(parents=True, exist_ok=False)

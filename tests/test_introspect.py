@@ -1,13 +1,15 @@
-import itertools
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 
-import artifact.runner as runner_module
 from artifact.introspect import list_runs, show
 from artifact.promote import promote
 from artifact.runner import run
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+NOW_1 = datetime(2026, 4, 19, 14, 23, 1, tzinfo=timezone.utc)
+NOW_2 = datetime(2026, 4, 19, 14, 23, 2, tzinfo=timezone.utc)
 
 
 class _FakeExecutor:
@@ -21,14 +23,6 @@ class _FakeExecutor:
             (out / name).write_text("x")
 
 
-def _counter_run_ids(monkeypatch):
-    counter = itertools.count(1)
-    monkeypatch.setattr(
-        runner_module, "make_run_id",
-        lambda *, now=None: f"2026-04-19T14-23-0{next(counter)}-0700",
-    )
-
-
 def test_list_runs_empty(tmp_path):
     src = FIXTURES / "trivial"
     dst = tmp_path / "trivial"
@@ -36,14 +30,13 @@ def test_list_runs_empty(tmp_path):
     assert list_runs(dst) == []
 
 
-def test_list_runs_newest_first(tmp_path, monkeypatch):
-    _counter_run_ids(monkeypatch)
+def test_list_runs_newest_first(tmp_path):
     src = FIXTURES / "with-params"
     dst = tmp_path / "with-params"
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("runs", "outs"))
 
-    run(dst, params={"user": "a"}, inputs={}, executor=_FakeExecutor(["report.md"]))
-    run(dst, params={"user": "b"}, inputs={}, executor=_FakeExecutor(["report.md"]))
+    run(dst, params={"user": "a"}, inputs={}, executor=_FakeExecutor(["report.md"]), now=NOW_1)
+    run(dst, params={"user": "b"}, inputs={}, executor=_FakeExecutor(["report.md"]), now=NOW_2)
 
     rows = list_runs(dst)
     assert len(rows) == 2
@@ -52,26 +45,24 @@ def test_list_runs_newest_first(tmp_path, monkeypatch):
     assert rows[1].params["user"] == "a"
 
 
-def test_list_runs_shows_promoted_labels(tmp_path, monkeypatch):
-    _counter_run_ids(monkeypatch)
+def test_list_runs_shows_promoted_labels(tmp_path):
     src = FIXTURES / "trivial"
     dst = tmp_path / "trivial"
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("runs", "outs"))
 
-    rd = run(dst, params={}, inputs={}, executor=_FakeExecutor(["hello.md"]))
+    rd = run(dst, params={}, inputs={}, executor=_FakeExecutor(["hello.md"]), now=NOW_1)
     promote(dst, rd.name, label="alice")
 
     rows = list_runs(dst)
     assert rows[0].promoted_to == ["alice"]
 
 
-def test_show_prints_frontmatter_and_labels(tmp_path, monkeypatch):
-    _counter_run_ids(monkeypatch)
+def test_show_prints_frontmatter_and_labels(tmp_path):
     src = FIXTURES / "with-params"
     dst = tmp_path / "with-params"
     shutil.copytree(src, dst, ignore=shutil.ignore_patterns("runs", "outs"))
 
-    rd = run(dst, params={"user": "a"}, inputs={}, executor=_FakeExecutor(["report.md"]))
+    rd = run(dst, params={"user": "a"}, inputs={}, executor=_FakeExecutor(["report.md"]), now=NOW_1)
     promote(dst, rd.name, label="alice")
 
     text = show(dst)
