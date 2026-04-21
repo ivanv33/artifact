@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -71,6 +72,8 @@ def run(
 
     (executor or noop_executor)(spec=spec, run_dir=run_dir, templated_body=templated_body)
 
+    _verify_outputs(spec, run_dir)
+
     _write_manifest(
         run_dir=run_dir,
         spec=spec,
@@ -118,6 +121,32 @@ def _resolve_inputs(spec: Spec, supplied: dict[str, str]) -> dict[str, Path]:
             raise RunnerError(f"input {name!r}: file not found at {p}")
         plan[name] = p
     return plan
+
+
+def _verify_outputs(spec: Spec, run_dir: Path) -> None:
+    """Enforce that every declared output exists; warn on extras.
+
+    Args:
+        spec: The parsed spec whose ``outputs`` list is the authority.
+        run_dir: The run directory whose ``out/`` is being inspected.
+
+    Raises:
+        RunnerError: If a declared output is missing from ``run_dir/out/``.
+    """
+    out_dir = run_dir / "out"
+    declared = {o.name for o in spec.outputs}
+    present = {p.name for p in out_dir.iterdir()} if out_dir.is_dir() else set()
+
+    missing = declared - present
+    if missing:
+        raise RunnerError(f"declared output missing in out/: {sorted(missing)}")
+
+    extra = present - declared
+    if extra:
+        print(
+            f"warning: undeclared output file(s) in {out_dir}: {sorted(extra)}",
+            file=sys.stderr,
+        )
 
 
 def _stage_inputs(plan: dict[str, Path], run_dir: Path) -> list[dict]:

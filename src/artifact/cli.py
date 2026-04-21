@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from artifact.exec import Executor, noop_executor
+from artifact.exec import Executor, deepagent_executor
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -53,10 +53,8 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
 
     Args:
         argv: Argument list. ``None`` means read from ``sys.argv[1:]``.
-        executor: Optional ``Executor`` to use for ``run``. Defaults to
-            ``noop_executor`` in Stage 4; flipped to ``deepagent_executor`` in
-            Stage 5. This is a public injection seam; tests use it to avoid
-            live LLM calls.
+        executor: Optional ``Executor`` for ``run``. Defaults to
+            ``deepagent_executor`` (real LLM). Public injection seam for tests.
 
     Returns:
         The process exit code.
@@ -74,7 +72,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
                 args.artifact_dir,
                 params=params,
                 inputs=inputs,
-                executor=executor or noop_executor,
+                executor=executor or deepagent_executor,
             )
         except RunnerError as e:
             print(f"error: {e}", file=sys.stderr)

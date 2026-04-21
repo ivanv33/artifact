@@ -194,3 +194,27 @@ def test_run_rejects_nonexistent_input_path(tmp_path):
             inputs={"events.json": str(tmp_path / "missing.json")},
             executor=executor,
         )
+
+
+def test_run_fails_if_declared_output_missing(tmp_path):
+    art = _copy_fixture("trivial", tmp_path)
+    executor = RecordingExecutor(outputs_to_write=[])  # writes nothing
+
+    with pytest.raises(RunnerError, match="declared output missing"):
+        run(art, params={}, inputs={}, executor=executor)
+
+
+def test_run_warns_on_undeclared_output(tmp_path, capsys):
+    art = _copy_fixture("trivial", tmp_path)
+
+    class SurplusExecutor:
+        def __call__(self, *, spec, run_dir, templated_body):
+            out = run_dir / "out"
+            out.mkdir(exist_ok=True)
+            (out / "hello.md").write_text("hi")
+            (out / "surprise.txt").write_text("extra")
+
+    run(art, params={}, inputs={}, executor=SurplusExecutor())
+    captured = capsys.readouterr()
+    assert "surprise.txt" in captured.err
+    assert "undeclared" in captured.err.lower()
