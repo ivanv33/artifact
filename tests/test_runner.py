@@ -13,7 +13,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 def _copy_fixture(name: str, dest: Path) -> Path:
     src = FIXTURES / name
     target = dest / name
-    shutil.copytree(src, target)
+    shutil.copytree(src, target, ignore=shutil.ignore_patterns("runs", "outs"))
     return target
 
 

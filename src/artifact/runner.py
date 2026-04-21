@@ -8,6 +8,7 @@ are added in later stages.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 from artifact.exec import Executor, noop_executor
@@ -48,7 +49,8 @@ def run(
 
     resolved_params = _resolve_params(spec, params)
 
-    run_id = make_run_id()
+    now = datetime.now().astimezone()
+    run_id = make_run_id(now=now)
     run_dir = artifact_dir / "runs" / run_id
     (run_dir / "in").mkdir(parents=True, exist_ok=False)
     (run_dir / "out").mkdir(parents=True, exist_ok=False)
@@ -67,6 +69,7 @@ def run(
         artifact_dir=artifact_dir,
         resolved_params=resolved_params,
         input_records=[],
+        now=now,
     )
 
     return run_dir
@@ -97,14 +100,13 @@ def _write_manifest(
     artifact_dir: Path,
     resolved_params: dict[str, object],
     input_records: list[dict],
+    now: datetime,
 ) -> None:
     """Write ``manifest.json`` capturing full run provenance."""
-    from datetime import datetime
-
     manifest = {
         "artifact": artifact_dir.name,
         "run_id": run_dir.name,
-        "timestamp": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "timestamp": now.isoformat(timespec="seconds"),
         "artifact_md_sha256": spec.artifact_sha256,
         "executor": spec.executor,
         "model": spec.model,

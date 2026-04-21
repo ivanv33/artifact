@@ -27,7 +27,7 @@ def test_run_cli_creates_run_dir_via_injected_executor(tmp_path):
 
     fixtures = Path(__file__).parent / "fixtures"
     art = tmp_path / "trivial"
-    shutil.copytree(fixtures / "trivial", art)
+    shutil.copytree(fixtures / "trivial", art, ignore=shutil.ignore_patterns("runs", "outs"))
 
     def stub_executor(*, spec, run_dir, templated_body):
         # produce the declared output so the Stage-5 verification step
