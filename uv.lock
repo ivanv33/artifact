@@ -51,13 +51,13 @@ dependencies = [
     { name = "deepagents" },
     { name = "langchain-anthropic" },
     { name = "langchain-google-genai" },
+    { name = "python-dotenv" },
     { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
-    { name = "python-dotenv" },
 ]
 
 [package.metadata]
@@ -65,14 +65,12 @@ requires-dist = [
     { name = "deepagents", specifier = ">=0.5.3" },
     { name = "langchain-anthropic", specifier = ">=1.4.1" },
     { name = "langchain-google-genai", specifier = ">=4.2.2" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
-]
+dev = [{ name = "pytest", specifier = ">=9.0.3" }]
 
 [[package]]
 name = "bracex"

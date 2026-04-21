@@ -43,7 +43,14 @@ uv sync
 
 The `artifact` CLI is installed as a uv console script.
 
-Optional: create a `.env` at the repo root with `GOOGLE_API_KEY=...` to run the opt-in Gemini integration test.
+Put your LLM provider key in a `.env` at the repo root (or any parent directory of where you invoke `artifact`):
+
+```
+GOOGLE_API_KEY=...        # for google_genai:... models
+ANTHROPIC_API_KEY=...     # for anthropic:... models
+```
+
+The CLI auto-loads `.env` from the nearest parent directory (like `docker compose` or `aider`). Shell-exported env vars still win, so CI/Docker-injected secrets are never overridden.
 
 ## ARTIFACT.md
 

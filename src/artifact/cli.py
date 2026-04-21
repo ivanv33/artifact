@@ -2,6 +2,12 @@
 
 The module is deliberately thin: it parses ``argv`` and calls into sibling
 modules. No business logic lives here.
+
+On import it sources a ``.env`` via ``python-dotenv`` (walking up from the
+current working directory until the filesystem or a VCS root) so that
+``GOOGLE_API_KEY`` and peers are available to the executor. Shell-exported
+env vars still win (``override=False``) — this fills gaps without stomping
+on CI/Docker-injected configuration.
 """
 
 from __future__ import annotations
@@ -9,7 +15,11 @@ from __future__ import annotations
 import argparse
 import sys
 
+from dotenv import find_dotenv, load_dotenv
+
 from artifact.exec import Executor, deepagent_executor
+
+load_dotenv(find_dotenv(usecwd=True), override=False)
 
 
 def build_parser() -> argparse.ArgumentParser:
