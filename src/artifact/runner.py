@@ -7,7 +7,9 @@ are added in later stages.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -48,6 +50,7 @@ def run(
     spec = parse_spec(artifact_dir / "ARTIFACT.md")
 
     resolved_params = _resolve_params(spec, params)
+    input_plan = _resolve_inputs(spec, inputs)
 
     now = datetime.now().astimezone()
     run_id = make_run_id(now=now)
@@ -55,11 +58,16 @@ def run(
     (run_dir / "in").mkdir(parents=True, exist_ok=False)
     (run_dir / "out").mkdir(parents=True, exist_ok=False)
 
+    input_records = _stage_inputs(input_plan, run_dir)
+
     (run_dir / "params.json").write_text(
         json.dumps(resolved_params, indent=2, sort_keys=True) + "\n"
     )
 
-    templated_body = render(spec.body, params=resolved_params, inputs={})
+    input_paths = {
+        rec["name"]: str((run_dir / "in" / rec["name"]).resolve()) for rec in input_records
+    }
+    templated_body = render(spec.body, params=resolved_params, inputs=input_paths)
 
     (executor or noop_executor)(spec=spec, run_dir=run_dir, templated_body=templated_body)
 
@@ -68,7 +76,7 @@ def run(
         spec=spec,
         artifact_dir=artifact_dir,
         resolved_params=resolved_params,
-        input_records=[],
+        input_records=input_records,
         now=now,
     )
 
@@ -91,6 +99,37 @@ def _resolve_params(spec: Spec, supplied: dict[str, str]) -> dict[str, object]:
         else:
             resolved[name] = p.default
     return resolved
+
+
+def _resolve_inputs(spec: Spec, supplied: dict[str, str]) -> dict[str, Path]:
+    """Validate that supplied inputs match declared ones and all source files exist."""
+    declared = {i.name for i in spec.inputs}
+    unknown = set(supplied) - declared
+    if unknown:
+        raise RunnerError(f"unknown input(s): {sorted(unknown)}")
+    missing = declared - set(supplied)
+    if missing:
+        raise RunnerError(f"input(s) not supplied: {sorted(missing)}")
+
+    plan: dict[str, Path] = {}
+    for name, raw in supplied.items():
+        p = Path(raw).resolve()
+        if not p.is_file():
+            raise RunnerError(f"input {name!r}: file not found at {p}")
+        plan[name] = p
+    return plan
+
+
+def _stage_inputs(plan: dict[str, Path], run_dir: Path) -> list[dict]:
+    """Copy each input into ``run_dir/in/<name>`` and return per-input manifest records."""
+    records: list[dict] = []
+    for name, source in plan.items():
+        dest = run_dir / "in" / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+        sha = hashlib.sha256(dest.read_bytes()).hexdigest()
+        records.append({"name": name, "sha256": sha, "source": str(source)})
+    return records
 
 
 def _write_manifest(

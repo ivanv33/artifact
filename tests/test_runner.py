@@ -105,3 +105,92 @@ def test_run_rejects_unknown_param(tmp_path):
 
     with pytest.raises(RunnerError, match="unknown param"):
         run(art, params={"user": "a", "nope": "x"}, inputs={}, executor=executor)
+
+
+def test_run_stages_inputs(tmp_path):
+    art = _copy_fixture("with-inputs", tmp_path)
+    src_events = tmp_path / "source-events.json"
+    src_events.write_text('[{"type":"Push"}]')
+
+    executor = RecordingExecutor(outputs_to_write=["report.md"])
+    run_dir = run(
+        art,
+        params={"user": "alice"},
+        inputs={"events.json": str(src_events)},
+        executor=executor,
+    )
+
+    staged = run_dir / "in" / "events.json"
+    assert staged.is_file()
+    assert staged.read_text() == '[{"type":"Push"}]'
+
+
+def test_run_records_input_sha256(tmp_path):
+    import hashlib
+    import json as _json
+
+    art = _copy_fixture("with-inputs", tmp_path)
+    src_events = tmp_path / "events.json"
+    data = b'[{"type":"Push"}]'
+    src_events.write_bytes(data)
+    expected = hashlib.sha256(data).hexdigest()
+
+    executor = RecordingExecutor(outputs_to_write=["report.md"])
+    run_dir = run(
+        art, params={"user": "alice"}, inputs={"events.json": str(src_events)}, executor=executor
+    )
+
+    manifest = _json.loads((run_dir / "manifest.json").read_text())
+    assert len(manifest["inputs"]) == 1
+    rec = manifest["inputs"][0]
+    assert rec["name"] == "events.json"
+    assert rec["sha256"] == expected
+    assert rec["source"] == str(src_events.resolve())
+
+
+def test_run_templates_inputs_to_absolute_paths(tmp_path):
+    art = _copy_fixture("with-inputs", tmp_path)
+    src_events = tmp_path / "e.json"
+    src_events.write_text("[]")
+
+    executor = RecordingExecutor(outputs_to_write=["report.md"])
+    run_dir = run(
+        art, params={"user": "alice"}, inputs={"events.json": str(src_events)}, executor=executor
+    )
+
+    staged = (run_dir / "in" / "events.json").resolve()
+    body = executor.calls[0]["templated_body"]
+    assert str(staged) in body
+
+
+def test_run_rejects_missing_input_declaration(tmp_path):
+    art = _copy_fixture("with-inputs", tmp_path)
+    executor = RecordingExecutor()
+    with pytest.raises(RunnerError, match="events.json"):
+        run(art, params={"user": "a"}, inputs={}, executor=executor)
+
+
+def test_run_rejects_unknown_input(tmp_path):
+    art = _copy_fixture("with-inputs", tmp_path)
+    src = tmp_path / "e.json"
+    src.write_text("[]")
+    executor = RecordingExecutor()
+    with pytest.raises(RunnerError, match="unknown input"):
+        run(
+            art,
+            params={"user": "a"},
+            inputs={"events.json": str(src), "extra.json": str(src)},
+            executor=executor,
+        )
+
+
+def test_run_rejects_nonexistent_input_path(tmp_path):
+    art = _copy_fixture("with-inputs", tmp_path)
+    executor = RecordingExecutor()
+    with pytest.raises(RunnerError, match="not found"):
+        run(
+            art,
+            params={"user": "a"},
+            inputs={"events.json": str(tmp_path / "missing.json")},
+            executor=executor,
+        )

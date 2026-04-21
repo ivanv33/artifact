@@ -27,6 +27,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--param", action="append", default=[], metavar="NAME=VALUE",
         help="Set a parameter. May be repeated.",
     )
+    run.add_argument(
+        "--input", action="append", default=[], metavar="NAME=PATH",
+        help="Map an input name to a file path. May be repeated.",
+    )
 
     return parser
 
@@ -50,7 +54,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
     Args:
         argv: Argument list. ``None`` means read from ``sys.argv[1:]``.
         executor: Optional ``Executor`` to use for ``run``. Defaults to
-            ``noop_executor`` in Stage 3; flipped to ``deepagent_executor`` in
+            ``noop_executor`` in Stage 4; flipped to ``deepagent_executor`` in
             Stage 5. This is a public injection seam; tests use it to avoid
             live LLM calls.
 
@@ -64,11 +68,12 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
 
     if args.cmd == "run":
         params = _split_kv(args.param, "--param")
+        inputs = _split_kv(args.input, "--input")
         try:
             run_dir = run_artifact(
                 args.artifact_dir,
                 params=params,
-                inputs={},
+                inputs=inputs,
                 executor=executor or noop_executor,
             )
         except RunnerError as e:
