@@ -1,2 +1,7 @@
 skills/artifact-workspace/
 .worktrees/
+runs/
+__pycache__/
+.venv/
+*.egg-info/
+.env

@@ -1,0 +1,35 @@
+[project]
+name = "artifact"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "ivanv33", email = "516487+ivanv33@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "deepagents>=0.5.3",
+    "langchain-anthropic>=1.4.1",
+    "langchain-google-genai>=4.2.2",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+artifact = "artifact.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.2,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "python-dotenv>=1.2.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = ["--import-mode=importlib", "-m", "not integration"]
+markers = [
+    "integration: tests that call a real LLM (opt-in via `pytest -m integration`); require GOOGLE_API_KEY in .env",
+]
