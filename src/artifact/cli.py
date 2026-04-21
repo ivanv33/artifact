@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import sys
 
+from artifact.exec import Executor, noop_executor
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser with its subcommands.
@@ -21,24 +23,60 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="Execute one artifact.")
     run.add_argument("artifact_dir")
+    run.add_argument(
+        "--param", action="append", default=[], metavar="NAME=VALUE",
+        help="Set a parameter. May be repeated.",
+    )
 
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def _split_kv(items: list[str], flag: str) -> dict[str, str]:
+    """Parse a list of ``NAME=VALUE`` strings into a dict; raise ``SystemExit`` on malformed."""
+    out: dict[str, str] = {}
+    for raw in items:
+        if "=" not in raw:
+            raise SystemExit(f"{flag} expects NAME=VALUE, got {raw!r}")
+        name, _, value = raw.partition("=")
+        if not name:
+            raise SystemExit(f"{flag} expects NAME=VALUE, got {raw!r}")
+        out[name] = value
+    return out
+
+
+def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> int:
     """Entry point used by the console script.
 
     Args:
         argv: Argument list. ``None`` means read from ``sys.argv[1:]``.
+        executor: Optional ``Executor`` to use for ``run``. Defaults to
+            ``noop_executor`` in Stage 3; flipped to ``deepagent_executor`` in
+            Stage 5. This is a public injection seam; tests use it to avoid
+            live LLM calls.
 
     Returns:
         The process exit code.
     """
+    from artifact.runner import RunnerError, run as run_artifact
+
     parser = build_parser()
     args = parser.parse_args(argv)
+
     if args.cmd == "run":
-        print(f"run {args.artifact_dir}")
+        params = _split_kv(args.param, "--param")
+        try:
+            run_dir = run_artifact(
+                args.artifact_dir,
+                params=params,
+                inputs={},
+                executor=executor or noop_executor,
+            )
+        except RunnerError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print(run_dir)
         return 0
+
     return 2
 
 

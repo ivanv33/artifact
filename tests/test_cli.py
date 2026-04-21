@@ -15,3 +15,27 @@ def test_run_subcommand_parses():
     args = parser.parse_args(["run", "some/dir"])
     assert args.cmd == "run"
     assert args.artifact_dir == "some/dir"
+
+
+from pathlib import Path
+
+
+def test_run_cli_creates_run_dir_via_injected_executor(tmp_path):
+    import shutil
+
+    from artifact.cli import main
+
+    fixtures = Path(__file__).parent / "fixtures"
+    art = tmp_path / "trivial"
+    shutil.copytree(fixtures / "trivial", art)
+
+    def stub_executor(*, spec, run_dir, templated_body):
+        # produce the declared output so the Stage-5 verification step
+        # (added later) stays green when re-running historical tests.
+        (run_dir / "out" / "hello.md").write_text("hi")
+
+    rc = main(["run", str(art)], executor=stub_executor)
+    assert rc == 0
+    runs = list((art / "runs").iterdir())
+    assert len(runs) == 1
+    assert (runs[0] / "manifest.json").is_file()
