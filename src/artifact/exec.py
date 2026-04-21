@@ -58,7 +58,7 @@ def deepagent_executor(*, spec: Spec, run_dir: Path, templated_body: str) -> Non
         run_dir: The run directory for the agent's filesystem backend.
         templated_body: The system prompt after template substitution.
     """
-    backend = FilesystemBackend(root_dir=str(run_dir))
+    backend = FilesystemBackend(root_dir=str(run_dir), virtual_mode=True)
     agent = create_deep_agent(
         model=spec.model,
         system_prompt=templated_body,
