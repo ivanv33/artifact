@@ -202,3 +202,108 @@ def test_template_subcommand_rejects_flags(capsys):
     with pytest.raises(SystemExit) as excinfo:
         main(["template", "--model", "x"])
     assert excinfo.value.code == 2
+
+
+class _FakeStdin:
+    """Minimal stdin double: fixed content + controllable isatty()."""
+
+    def __init__(self, content: str, *, isatty: bool) -> None:
+        self._content = content
+        self._isatty = isatty
+
+    def isatty(self) -> bool:
+        return self._isatty
+
+    def read(self) -> str:
+        if self._isatty:
+            raise AssertionError("read() should not be called when isatty()")
+        return self._content
+
+
+def test_create_cli_rejects_tty_stdin(tmp_path, capsys):
+    from artifact.cli import main
+
+    rc = main(["create", str(tmp_path / "x")], stdin=_FakeStdin("", isatty=True))
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: create reads ARTIFACT.md from stdin;")
+    assert "artifact template | artifact create" in err
+    assert not (tmp_path / "x").exists()
+
+
+def test_create_cli_rejects_empty_stdin(tmp_path, capsys):
+    from artifact.cli import main
+
+    rc = main(["create", str(tmp_path / "x")], stdin=_FakeStdin("", isatty=False))
+    assert rc == 1
+    assert "error: stdin is empty" in capsys.readouterr().err
+    assert not (tmp_path / "x").exists()
+
+
+def test_create_cli_writes_files_on_valid_stdin(tmp_path, capsys):
+    from artifact.cli import main
+    from artifact.create import render_template
+
+    content = render_template()
+    dest = tmp_path / "1-shortlist"
+    rc = main(["create", str(dest)], stdin=_FakeStdin(content, isatty=False))
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    # stdout is the destination path (as passed, not resolved).
+    assert out == str(dest)
+    assert (dest / "ARTIFACT.md").read_text(encoding="utf-8") == content
+    assert (dest / ".gitignore").read_text(encoding="utf-8") == "runs/*\n"
+
+
+def test_create_cli_surfaces_spec_errors(tmp_path, capsys):
+    from artifact.cli import main
+
+    rc = main(
+        ["create", str(tmp_path / "bad")],
+        stdin=_FakeStdin("not an artifact", isatty=False),
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ")
+    assert "Traceback" not in err
+    assert not (tmp_path / "bad").exists()
+
+
+def test_create_cli_refuses_non_empty_dir(tmp_path, capsys):
+    from artifact.cli import main
+    from artifact.create import render_template
+
+    dest = tmp_path / "occupied"
+    dest.mkdir()
+    (dest / "already").write_text("x")
+
+    rc = main(
+        ["create", str(dest)],
+        stdin=_FakeStdin(render_template(), isatty=False),
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "is not empty" in err
+    assert (dest / "already").read_text(encoding="utf-8") == "x"
+    assert not (dest / "ARTIFACT.md").exists()
+
+
+def test_template_create_pipeline_end_to_end(tmp_path, capsys):
+    """The headline one-liner: template output piped into create writes a
+    dir whose ARTIFACT.md parses cleanly via parse_spec."""
+    from artifact.cli import main
+    from artifact.spec import parse_spec
+
+    # Phase 1: run `template`, capture stdout.
+    rc = main(["template"])
+    assert rc == 0
+    template_out = capsys.readouterr().out
+
+    # Phase 2: feed it into `create` via the injected stdin.
+    dest = tmp_path / "1-end-to-end"
+    rc = main(["create", str(dest)], stdin=_FakeStdin(template_out, isatty=False))
+    assert rc == 0
+
+    spec = parse_spec(dest / "ARTIFACT.md")
+    assert spec.kind == "transform"
+    assert spec.inputs and spec.params and spec.outputs

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from typing import TextIO
 
 from dotenv import find_dotenv, load_dotenv
 
@@ -98,6 +99,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Emit a reference ARTIFACT.md to stdout.",
     )
 
+    create_cmd = sub.add_parser(
+        "create",
+        help="Read ARTIFACT.md from stdin and scaffold <dir>.",
+    )
+    create_cmd.add_argument(
+        "dir",
+        help="Destination directory. Will be created if absent; must be empty if present.",
+    )
+
     return parser
 
 
@@ -114,7 +124,12 @@ def _split_kv(items: list[str], flag: str) -> dict[str, str]:
     return out
 
 
-def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    executor: Executor | None = None,
+    stdin: TextIO | None = None,
+) -> int:
     """Entry point used by the console script.
 
     Args:
@@ -122,6 +137,8 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
         executor: Optional ``Executor`` for ``run``. ``None`` means the runner
             resolves one via ``get_executor(spec)`` based on ``spec.executor``.
             Public injection seam for tests.
+        stdin: Optional stdin source for ``create``. ``None`` means
+            ``sys.stdin``. Public injection seam for tests.
 
     Returns:
         The process exit code.
@@ -131,6 +148,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
 
     parser = build_parser()
     args = parser.parse_args(argv)
+    stdin = stdin if stdin is not None else sys.stdin
 
     if args.cmd == "run":
         if args.model == "":
@@ -205,6 +223,32 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
         from artifact.create import render_template
 
         sys.stdout.write(render_template())
+        return 0
+
+    if args.cmd == "create":
+        from pathlib import Path
+
+        from artifact.create import create as create_artifact
+        from artifact.spec import SpecError
+
+        if stdin.isatty():
+            print(
+                "error: create reads ARTIFACT.md from stdin; "
+                "try: artifact template | artifact create <dir>",
+                file=sys.stderr,
+            )
+            return 1
+        content = stdin.read()
+        if not content:
+            print("error: stdin is empty", file=sys.stderr)
+            return 1
+
+        try:
+            out = create_artifact(Path(args.dir), content=content)
+        except (SpecError, OSError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        print(out)
         return 0
 
     return 2
