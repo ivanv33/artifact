@@ -157,3 +157,51 @@ def test_parse_spec_from_str_reports_path_in_error():
 
     with pytest.raises(SpecError, match="<synth>"):
         parse_spec_from_str("no frontmatter at all", Path("<synth>"))
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    ["../x.md", "/abs/x.md", "sub/x.md", ".", "..", "a/b/c"],
+)
+def test_input_name_must_be_bare_filename(tmp_path, bad_name):
+    from artifact.spec import SpecError, parse_spec
+
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: deepagent\nmodel: x\n"
+        f"inputs:\n  - name: {bad_name!r}\n    desc: d\n"
+        "outputs:\n  - name: o.md\n    desc: d\n---\nbody"
+    )
+    with pytest.raises(SpecError, match="input name must be a bare filename"):
+        parse_spec(p)
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    ["../x.md", "/abs/x.md", "sub/x.md", ".", "..", "a/b/c"],
+)
+def test_output_name_must_be_bare_filename(tmp_path, bad_name):
+    from artifact.spec import SpecError, parse_spec
+
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: deepagent\nmodel: x\n"
+        f"outputs:\n  - name: {bad_name!r}\n    desc: d\n---\nbody"
+    )
+    with pytest.raises(SpecError, match="output name must be a bare filename"):
+        parse_spec(p)
+
+
+def test_param_name_with_slash_is_not_validated_by_filename_rule(tmp_path):
+    # Params are identifiers, not filenames. The bare-filename rule must
+    # not apply here. (A separate identifier rule is deferred.)
+    from artifact.spec import parse_spec
+
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: deepagent\nmodel: x\n"
+        "params:\n  - name: a/b\n    type: string\n    required: false\n    desc: d\n"
+        "outputs:\n  - name: o.md\n    desc: d\n---\nbody"
+    )
+    spec = parse_spec(p)
+    assert spec.params[0].name == "a/b"

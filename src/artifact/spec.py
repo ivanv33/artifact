@@ -201,11 +201,24 @@ def _require_str(fm: dict, key: str, path: Path) -> str:
     return v
 
 
+def _require_bare_filename(name: str, kind: str, path: Path) -> None:
+    """Reject ``name`` if it contains a path separator or is ``.`` / ``..``.
+
+    ``kind`` is "input" or "output" for the error message.
+    """
+    if "/" in name or name in (".", "..") or Path(name).name != name:
+        raise SpecError(
+            f"{path}: {kind} name must be a bare filename, got {name!r}"
+        )
+
+
 def _parse_input(raw: object, path: Path) -> Input:
     """Parse one entry from the frontmatter ``inputs`` list."""
     if not isinstance(raw, dict):
         raise SpecError(f"{path}: input entries must be mappings")
-    return Input(name=_require_str(raw, "name", path), desc=raw.get("desc", ""))
+    name = _require_str(raw, "name", path)
+    _require_bare_filename(name, "input", path)
+    return Input(name=name, desc=raw.get("desc", ""))
 
 
 def _parse_param(raw: object, path: Path) -> Param:
@@ -227,4 +240,6 @@ def _parse_output(raw: object, path: Path) -> Output:
     """Parse one entry from the frontmatter ``outputs`` list."""
     if not isinstance(raw, dict):
         raise SpecError(f"{path}: output entries must be mappings")
-    return Output(name=_require_str(raw, "name", path), desc=raw.get("desc", ""))
+    name = _require_str(raw, "name", path)
+    _require_bare_filename(name, "output", path)
+    return Output(name=name, desc=raw.get("desc", ""))
