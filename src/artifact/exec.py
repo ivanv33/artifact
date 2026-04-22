@@ -9,10 +9,11 @@ tested via the ``Executor`` protocol with fakes in ``tests/test_runner.py``.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
+from langchain_core.language_models import BaseChatModel
 
 from artifact.spec import Spec
 
@@ -45,6 +46,46 @@ def noop_executor(*, spec: Spec, run_dir: Path, templated_body: str) -> None:
         templated_body: Unused.
     """
     return None
+
+
+_CLAUDE_CODE_PREFIX = "claude_code:"
+
+
+def _default_claude_code_factory(*, model: str) -> BaseChatModel:
+    """Construct the real ``ChatClaudeCode``; isolated so tests can inject a fake."""
+    from langchain_claude_code import ChatClaudeCode
+
+    return ChatClaudeCode(model=model)
+
+
+def _resolve_chat_model(
+    model: str,
+    *,
+    claude_code_factory: Callable[..., BaseChatModel] = _default_claude_code_factory,
+) -> str | BaseChatModel:
+    """Translate a ``spec.model`` string into a chat model that ``deepagents`` can use.
+
+    Strings without the ``claude_code:`` prefix are returned unchanged so that
+    LangChain's ``init_chat_model`` continues to handle ``anthropic:``,
+    ``google_genai:``, ``openai:``, and friends.
+
+    Strings with the ``claude_code:`` prefix are split into prefix and tail;
+    the tail is handed to ``claude_code_factory`` (default: real
+    ``ChatClaudeCode``), and the resulting instance is returned. ``deepagents``
+    accepts both strings and ``BaseChatModel`` instances, so the call site
+    treats both return types identically.
+
+    Raises:
+        ValueError: When the prefix is present but the tail is empty
+            (e.g., ``--model claude_code:`` slips past the CLI's empty-string
+            check, which only catches empty *whole* strings).
+    """
+    if not model.startswith(_CLAUDE_CODE_PREFIX):
+        return model
+    tail = model[len(_CLAUDE_CODE_PREFIX):]
+    if not tail:
+        raise ValueError("claude_code: requires a model name after the prefix")
+    return claude_code_factory(model=tail)
 
 
 def deepagent_executor(*, spec: Spec, run_dir: Path, templated_body: str) -> None:
