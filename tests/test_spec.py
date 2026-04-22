@@ -88,3 +88,13 @@ def test_executor_claude_cli_accepted(tmp_path):
     )
     spec = parse_spec(p)
     assert spec.executor == "claude_cli"
+
+
+def test_executor_claude_cli_rejects_colon_model(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: claude_cli\nmodel: anthropic:foo\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    with pytest.raises(SpecError, match="claude_cli"):
+        parse_spec(p)

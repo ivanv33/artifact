@@ -138,6 +138,11 @@ def parse_spec(path: str | Path) -> Spec:
         )
 
     model = _require_str(fm, "model", path)
+    if executor == "claude_cli" and ":" in model:
+        raise SpecError(
+            f"{path}: executor 'claude_cli' requires a bare Claude model name "
+            f"(no provider prefix); got {model!r}"
+        )
 
     inputs = [_parse_input(i, path) for i in fm.get("inputs") or []]
     params = [_parse_param(p, path) for p in fm.get("params") or []]
