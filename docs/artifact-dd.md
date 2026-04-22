@@ -138,6 +138,8 @@ Field rules:
 
 Template variables available in the body: `{{ params.<name> }}` for each declared param, `{{ inputs.<name> }}` for the path to each staged input inside the run. Substituted before dispatch.
 
+**Body style — capabilities, not tool identifiers.** When the body directs the agent to use tools, refer to capabilities in verb form ("search the web for…", "fetch the page at…") rather than specific tool identifiers (`WebSearch`, `tavily_search`, `search_web`, etc.). Every framework names its tools differently; capability-language keeps the recipe portable across executors, and the agent introspects its own toolbox at dispatch time to pick the right call. Not enforced by the parser — a convention for artifacts that expect to outlive their original execution environment.
+
 ---
 
 ## Execution

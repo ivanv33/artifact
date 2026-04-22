@@ -59,7 +59,13 @@ Each command does exactly one thing. `template` reads nothing and touches no fil
 
 The full reference artifact — frontmatter + body — as a single UTF-8 stream to stdout. Exit 0, no stderr, no side effects.
 
-Content is a **competitor brief** — the DD's §Example 4 extended with an optional `focus` param and a `seed.md` input, chosen to exercise every declaration shape in one compact artifact (a declared input, one required + one optional param, two outputs in different formats). The `kind`, `executor`, and param `type` comment strings are interpolated at render time from the parser's authoritative constants (see Parser sync) so they can't drift.
+Content is **`3-car-shortlist`** — a wisdom-layer artifact that helps its author decide which cars to research before visiting dealerships or scrolling listings. Chosen for three template-specific reasons:
+
+- **The input is trivially fakeable.** A one-paragraph requirements brief ("SUV, family of four, under $40k, Seattle") is something every first-time user can supply in a minute — no pretend CSV, no synthetic transcript.
+- **The output is durable.** A shortlist of models with rationale stays useful six months after the run; a listings snapshot would be stale the next day. Reproducibility earns its keep.
+- **The shape is aggressively un-Dagster.** The body asks the agent to synthesize owner-forum discussion, reliability data, and recall history into a structured memo with wildcards. That's exactly the gap a DAG-shaped orchestrator can't fill, and it's a gap every knowledge worker recognizes from their own "I'm researching X" afternoons.
+
+Six params span all four allowed types, one input, three outputs in different shapes. The `kind`, `executor`, and param `type` comment strings are interpolated at render time from the parser's authoritative constants (see Parser sync) so they can't drift.
 
 ```yaml
 ---
@@ -73,62 +79,152 @@ executor: deepagent                    # one of: claude_cli | deepagent
 model: anthropic:claude-sonnet-4-6     # provider:name under executor: deepagent; bare Claude model under executor: claude_cli (optional there)
 
 inputs:
-  - name: seed.md
+  - name: requirements.md
     desc: |
-      Seed material — the target's own About/Pricing page text, a press
-      release, or any short document that anchors the brief in primary
-      source. Plain markdown. `name:` must be a bare filename.
+      Free-form brief describing what you want in a car and why.
+      Who drives it, climate, commute, what you'll carry, deal-breakers,
+      nice-to-haves, any brand lean or scar tissue ("my last Jetta ate
+      two transmissions"). A paragraph is plenty.
+      `name:` must be a bare filename.
 
 params:
-  - name: target
-    type: string                       # one of: bool | float | int | string
+  - name: max_budget_usd
+    type: float                        # one of: bool | float | int | string
     required: true
-    desc: Name of the company being briefed (e.g. "OpenAI").
-  - name: focus
-    type: string
+    desc: Upper bound on what you'll spend out the door (not monthly payment).
+  - name: stretch_budget_usd
+    type: float
     required: false
-    default: general
+    default: null
     desc: |
-      Aspect to emphasize: "general", "pricing", "hiring",
-      "engineering", "go-to-market", etc. Free-form.
+      Used only for wildcards. If set, the agent may propose picks priced
+      up to this amount and explain what the extra money unlocks. Unset =
+      no stretch wildcards.
+  - name: shortlist_size
+    type: int
+    required: false
+    default: 5
+    desc: How many model recommendations to include in the core shortlist.
+  - name: wildcard_count
+    type: int
+    required: false
+    default: 3
+    desc: |
+      How many "outside your requirements" picks to include. Zero disables
+      the wildcards section.
+  - name: reliability_weight
+    type: float
+    required: false
+    default: 0.7
+    desc: |
+      0.0 = weight features/fun/looks equally with reliability.
+      1.0 = rank reliability above all else.
+      Used to shape picks, not to hard-filter.
+  - name: include_used
+    type: bool
+    required: false
+    default: true
+    desc: |
+      true = consider model years going back ~8 years when they fit budget.
+      false = limit to new or near-new (within 2 model years).
 
 outputs:
-  - name: brief.md
+  - name: picks.md
     desc: |
-      Two-page narrative brief on {{ params.target }}, one H2 per theme.
-      Cite primary sources by URL in inline links.
-  - name: facts.json
+      Prose memo. One H2 per recommended {year-range, make, model, trim}
+      with: why it fits the requirements, 3-5 things owners consistently
+      say (good and bad) with source URLs, expected price band, and
+      common issues to watch for at this age/mileage.
+  - name: candidates.json
     desc: |
-      Structured fact sheet:
-      {
-        "founded": <int year | null>,
-        "hq": <string | null>,
-        "headcount_estimate": <int | null>,
-        "funding_total_usd": <int | null>,
-        "primary_products": [<string>...],
+      Structured list of picks:
+      [{
+        "rank": <int>,
+        "make": <string>,
+        "model": <string>,
+        "year_range": <string e.g. "2020-2022">,
+        "trim_hints": [<string>...],
+        "price_usd_range": [<int>, <int>],
+        "fit_score": <float 0..1>,
+        "why_fits": <string — one sentence>,
+        "what_owners_say": [{"claim": <string>, "source": <url>}, ...],
+        "common_issues": [<string>...],
         "sources": [<url>...]
-      }
+      }, ...]
+  - name: wildcards.md
+    desc: |
+      Picks deliberately outside the stated requirements, with a paragraph
+      each explaining why the caller should reconsider. Three flavors, one
+      of each when applicable: stretch-budget, segment-adjacent,
+      older-premium-for-same-dollars.
 ---
 
-You are producing a competitor brief for {{ params.target }}.
+# Body style: refer to agent capabilities as verbs ("search the web",
+# "fetch the page"), not specific tool identifiers. Keeps the recipe
+# portable across executors; the agent picks the right tool at run time.
 
-Start from {{ inputs.seed.md }} as primary source. Use the websearch
-and fetch tools to confirm and extend: company background, products,
-pricing posture, recent announcements, and anything relevant to the
-focus area "{{ params.focus }}".
+You are recommending which cars the author of {{ inputs.requirements.md }}
+should SHORTLIST — the research that happens before they touch a listing
+site. You are not finding them a specific vehicle to buy. You are naming
+the models, year ranges, and trims worth considering, and explaining why.
 
-Write:
-- out/brief.md — narrative brief, one H2 per theme. Cite every claim
-  with an inline link to the source.
-- out/facts.json — structured fact sheet matching the schema in the
-  output description above. Use null for fields you cannot confirm.
+Your evidence must come from people who actually own these cars, not from
+manufacturer marketing or SEO-bait "top 10" listicles. Prefer:
+
+- Owner communities and model-specific forums for lived experience.
+- Independent reliability and recall data (government recall databases,
+  consumer-reported complaint aggregators).
+- Real-world transaction price ranges, not MSRP or live listings.
+
+Search the web for owner discussions, reliability reports, and recall
+histories for each candidate. Fetch specific pages when you need the
+exact claim or number to quote. For every factual claim in your outputs,
+include an inline URL you actually visited. For every pick, cite at
+least two independent owner-community sources. If you can't meet that
+bar, say so in the memo rather than padding with weaker sources.
+
+Produce three files:
+
+**`out/picks.md`** — the core memo. {{ params.shortlist_size }} H2
+sections, one per recommended model. Each section opens with a specific
+pick (year range + make + model + trim guidance), explains in one
+paragraph why it fits the caller's requirements, lists 3-5 bullets of
+what owners consistently report (good and bad) with inline source URLs,
+names the expected price band, and calls out 1-2 things to watch for
+when inspecting a specific listing at that age/mileage.
+
+**`out/candidates.json`** — the same picks in the structured schema
+described in the output declaration above. Every `source` must be a real
+URL you used.
+
+**`out/wildcards.md`** — {{ params.wildcard_count }} picks OUTSIDE the
+stated requirements. Aim for one of each flavor when applicable:
+stretch-budget (only if {{ params.stretch_budget_usd }} is set — what
+does the extra money unlock), segment-adjacent (wagon instead of SUV,
+say), and older-premium-for-same-dollars (older model year of a
+higher-class vehicle; call out ownership-cost trade-offs honestly).
+
+Weighting: {{ params.reliability_weight }} near 1.0 ranks reliability
+above features; near 0.5 is balanced; below 0.3 means the caller is
+buying for joy. {{ params.include_used }} = false limits picks to new
+or within two model years; true widens the net back ~8 years when the
+price fits.
+
+Be specific. "Toyota RAV4" is not a pick; "2020-2022 RAV4 XLE or above
+(skip LE — cloth seats, no blind-spot monitor)" is a pick.
 ```
 
 Rationale for a functional reference (not a blank stub):
 
-- **Every `desc:` is concrete prose.** A user editing "Seed material — the target's own About/Pricing page text…" into their own description writes better prose than a user filling in `desc: TODO`.
+- **Every `desc:` is concrete prose.** A user editing "Free-form brief describing what you want in a car and why…" into their own input description writes better prose than a user filling in `desc: TODO`.
 - **Editing a working example is cheaper than filling blanks.** The blank-page problem applies to agents too. Given a full artifact, an agent rewriting it for a different task removes what it doesn't need and adapts what it does; given a stub, it has to invent the shape.
 - **`template | create` smoke-tests the full pipeline** on a fresh install: emit → pipe → parse → write → (optionally) `run`. If any link breaks, the one-liner surfaces it.
+
+### Body style: capabilities, not tool identifiers
+
+The emitted body refers to agent capabilities in verb form — "search the web for…", "fetch the page at…" — rather than specific tool identifiers (`WebSearch`, `tavily_search`, `search_web`, etc.). Every framework names tools differently; `spec.py` already allows two executors (`deepagent`, `claude_cli`) and more may come. Naming the capability keeps the recipe portable: the agent introspects its own toolbox and picks the right call. Naming a specific identifier breaks the moment someone runs it through a differently-wired executor.
+
+The convention is captured by a one-line comment above the body in the emitted template and restated in `artifact-dd.md`'s body-style note. The parser does not enforce it for user-authored bodies; it is guidance, not validation. Cross-cutting agent-hygiene defaults ("always cite sources, never fabricate URLs") could eventually live in the `deepagent_executor`'s base system prompt — deferred; keep them in the template body for now, where they are visible and editable.
 
 Trade-off accepted: the default pipeline (`artifact template | artifact create foo`) writes an opinionated artifact the user will edit. That's fine — delete is cheaper than invent, and an agent/user who wants something else pipes their own content through `create`.
 
