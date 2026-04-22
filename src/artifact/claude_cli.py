@@ -9,9 +9,13 @@ ourselves keeps the dep surface minimal.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
-from typing import Iterable, TextIO
+import threading
+from pathlib import Path
+from typing import Callable, Iterable, TextIO
 
+from artifact.runner import RunnerError
 from artifact.spec import Spec
 
 
@@ -86,3 +90,98 @@ def _consume_stream(
         elif etype == "result":
             result = event
     return result
+
+
+_USER_KICKOFF = (
+    "Execute the recipe in your system prompt. "
+    "Read inputs from in/ and write outputs to out/ using the declared output names."
+)
+
+_RESULT_FIELD_MAP = {
+    "session_id": "session_id",
+    "model": "model_used",
+    "num_turns": "num_turns",
+    "duration_ms": "duration_ms",
+    "total_cost_usd": "total_cost_usd",
+}
+
+
+def claude_cli_executor(
+    *,
+    spec: Spec,
+    run_dir: Path,
+    templated_body: str,
+    popen_factory: Callable[..., subprocess.Popen] = subprocess.Popen,
+) -> dict | None:
+    """Execute an artifact by shelling out to the local ``claude`` CLI.
+
+    Streams the CLI's ``--output-format stream-json`` output: assistant text
+    and tool-use summaries are forwarded to our stdout live; the final
+    ``result`` event is extracted and returned under a ``claude_cli:`` manifest
+    block.
+
+    Raises:
+        RunnerError: if ``claude`` is missing from PATH, the subprocess exits
+            non-zero, the stream ends without a ``result`` event, or the
+            ``result`` event carries ``is_error: true``.
+    """
+    argv = _build_argv(
+        spec=spec, templated_body=templated_body, kickoff=_USER_KICKOFF
+    )
+    try:
+        proc = popen_factory(
+            argv,
+            cwd=str(run_dir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+    except FileNotFoundError as e:
+        raise RunnerError(
+            "claude CLI not found on PATH; install with "
+            "`npm i -g @anthropic-ai/claude-code`"
+        ) from e
+
+    stderr_tail: list[str] = []
+
+    def _pump_stderr() -> None:
+        for line in proc.stderr:
+            stderr_tail.append(line)
+            if len(stderr_tail) > 20:
+                stderr_tail.pop(0)
+            sys.stderr.write(line)
+            sys.stderr.flush()
+
+    pump = threading.Thread(target=_pump_stderr, daemon=True)
+    pump.start()
+    try:
+        result = _consume_stream(proc.stdout, stdout=sys.stdout)
+    finally:
+        try:
+            proc.stdout.close()
+        except Exception:
+            pass
+    rc = proc.wait()
+    pump.join(timeout=1.0)
+
+    if rc != 0:
+        tail = "".join(stderr_tail).rstrip()
+        raise RunnerError(
+            f"claude CLI exited with code {rc}"
+            + (f"; stderr tail:\n{tail}" if tail else "")
+        )
+    if result is None:
+        raise RunnerError("claude CLI exited without a final result event")
+    if result.get("is_error") is True:
+        raise RunnerError(
+            f"claude CLI reported error: subtype={result.get('subtype')!r} "
+            f"result={result.get('result')!r}"
+        )
+
+    extracted = {
+        dst: result[src]
+        for src, dst in _RESULT_FIELD_MAP.items()
+        if src in result
+    }
+    return {"claude_cli": extracted}

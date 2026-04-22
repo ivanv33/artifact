@@ -121,3 +121,119 @@ def test_consume_stream_skips_unknown_and_rate_limit_events():
     r = _consume_stream(lines, stdout=buf)
     assert buf.getvalue().strip() == "x"
     assert r is not None
+
+
+import pytest
+
+from artifact.claude_cli import claude_cli_executor
+from artifact.runner import RunnerError
+
+
+class _FakePopen:
+    def __init__(self, *, stdout_text: str, stderr_text: str, returncode: int) -> None:
+        self.stdout = io.StringIO(stdout_text)
+        self.stderr = io.StringIO(stderr_text)
+        self._rc = returncode
+        self.returncode = returncode
+
+    def wait(self) -> int:
+        return self._rc
+
+
+def _factory(*, stdout_text: str = "", stderr_text: str = "", returncode: int = 0):
+    def _make(*args, **kwargs):
+        return _FakePopen(
+            stdout_text=stdout_text, stderr_text=stderr_text, returncode=returncode
+        )
+    return _make
+
+
+def test_executor_success_returns_claude_cli_manifest_block(tmp_path):
+    stream = (
+        '{"type":"assistant","message":{"content":'
+        '[{"type":"text","text":"done"}]}}\n'
+        '{"type":"result","session_id":"sess-1","model":"haiku","num_turns":2,'
+        '"duration_ms":5,"total_cost_usd":0.01}\n'
+    )
+    out = claude_cli_executor(
+        spec=_fake_spec(),
+        run_dir=tmp_path,
+        templated_body="body",
+        popen_factory=_factory(stdout_text=stream),
+    )
+    assert out == {
+        "claude_cli": {
+            "session_id": "sess-1",
+            "model_used": "haiku",
+            "num_turns": 2,
+            "duration_ms": 5,
+            "total_cost_usd": 0.01,
+        }
+    }
+
+
+def test_executor_non_zero_exit_raises_runner_error(tmp_path):
+    with pytest.raises(RunnerError, match=r"exit.*2"):
+        claude_cli_executor(
+            spec=_fake_spec(),
+            run_dir=tmp_path,
+            templated_body="body",
+            popen_factory=_factory(
+                stdout_text='{"type":"result"}\n',
+                stderr_text="boom\n",
+                returncode=2,
+            ),
+        )
+
+
+def test_executor_missing_result_event_raises(tmp_path):
+    stream = '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}\n'
+    with pytest.raises(RunnerError, match="final result event"):
+        claude_cli_executor(
+            spec=_fake_spec(),
+            run_dir=tmp_path,
+            templated_body="body",
+            popen_factory=_factory(stdout_text=stream),
+        )
+
+
+def test_executor_claude_not_on_path_raises_with_install_hint(tmp_path):
+    def _boom(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file", "claude")
+
+    with pytest.raises(RunnerError, match="claude CLI not found"):
+        claude_cli_executor(
+            spec=_fake_spec(),
+            run_dir=tmp_path,
+            templated_body="body",
+            popen_factory=_boom,
+        )
+
+
+def test_executor_is_error_result_raises(tmp_path):
+    stream = (
+        '{"type":"result","is_error":true,"subtype":"error_max_turns",'
+        '"result":"exceeded turn budget"}\n'
+    )
+    with pytest.raises(RunnerError, match="error_max_turns"):
+        claude_cli_executor(
+            spec=_fake_spec(),
+            run_dir=tmp_path,
+            templated_body="body",
+            popen_factory=_factory(stdout_text=stream),
+        )
+
+
+def test_executor_omits_missing_result_fields_from_manifest(tmp_path):
+    stream = (
+        '{"type":"result","session_id":"sess-2","model":"haiku"}\n'
+    )
+    out = claude_cli_executor(
+        spec=_fake_spec(),
+        run_dir=tmp_path,
+        templated_body="body",
+        popen_factory=_factory(stdout_text=stream),
+    )
+    assert out == {
+        "claude_cli": {"session_id": "sess-2", "model_used": "haiku"}
+    }
