@@ -18,6 +18,10 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 pytestmark = pytest.mark.integration
 
+# Override and declared are the same model on purpose: one API key, minimum
+# cost, minimum drift risk. The decisive wire-check is ``model_overridden is
+# True`` — if ``--model`` were not threaded through, that field would be
+# False even with identical strings.
 OVERRIDE_MODEL = "google_genai:gemini-2.5-flash-lite"
 DECLARED_MODEL = "google_genai:gemini-2.5-flash-lite"
 
