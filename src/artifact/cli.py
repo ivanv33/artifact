@@ -131,6 +131,25 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
         if args.model == "":
             print("error: --model requires a non-empty string", file=sys.stderr)
             return 1
+        if args.model is not None and ":" in args.model:
+            # Pre-validate against claude_cli artifacts. We need the executor
+            # string, which requires parsing the spec. Failures here are
+            # converted to the same ``error: ...`` surface the runner uses.
+            from artifact.spec import SpecError, parse_spec
+            from pathlib import Path as _P
+            try:
+                _spec = parse_spec(_P(args.artifact_dir) / "ARTIFACT.md")
+            except (SpecError, OSError) as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 1
+            if _spec.executor == "claude_cli":
+                print(
+                    f"error: --model for executor: claude_cli requires a "
+                    f"bare Claude model name (no provider prefix); got "
+                    f"{args.model!r}",
+                    file=sys.stderr,
+                )
+                return 1
         params = _split_kv(args.param, "--param")
         inputs = _split_kv(args.input, "--input")
         try:
