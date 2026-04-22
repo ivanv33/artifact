@@ -66,6 +66,8 @@ def test_run_writes_manifest(tmp_path):
     assert manifest["promoted_to"] == []
     assert len(manifest["artifact_md_sha256"]) == 64
     assert manifest["inputs"] == []
+    assert manifest["model_declared"] == "anthropic:claude-sonnet-4-6"
+    assert manifest["model_overridden"] is False
 
 
 def test_run_templates_params_in_body(tmp_path):
@@ -245,3 +247,21 @@ def test_run_no_model_override_preserves_declared(tmp_path):
     assert len(executor.calls) == 1
     # The `with-params` fixture declares anthropic:claude-sonnet-4-6.
     assert executor.calls[0]["spec"].model == "anthropic:claude-sonnet-4-6"
+
+
+def test_run_manifest_records_override(tmp_path):
+    art = _copy_fixture("with-params", tmp_path)
+    executor = RecordingExecutor(outputs_to_write=["report.md"])
+
+    run_dir = run(
+        art,
+        params={"user": "alice"},
+        inputs={},
+        executor=executor,
+        model="claude_code:haiku",
+    )
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["model"] == "claude_code:haiku"
+    assert manifest["model_declared"] == "anthropic:claude-sonnet-4-6"
+    assert manifest["model_overridden"] is True

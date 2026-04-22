@@ -96,6 +96,7 @@ def run(
         resolved_params=resolved_params,
         input_records=input_records,
         now=now,
+        model_override=model,
     )
 
     return run_dir
@@ -184,15 +185,31 @@ def _write_manifest(
     resolved_params: dict[str, object],
     input_records: list[dict],
     now: datetime,
+    model_override: str | None,
 ) -> None:
-    """Write ``manifest.json`` capturing full run provenance."""
+    """Write ``manifest.json`` capturing full run provenance.
+
+    Args:
+        run_dir: Run directory receiving ``manifest.json``.
+        spec: The parsed spec. ``spec.model`` is the declared model.
+        artifact_dir: Artifact root (for the ``artifact`` field).
+        resolved_params: Effective params after default merging.
+        input_records: Per-input manifest records (name/sha256/source).
+        now: Timestamp for the ``timestamp`` field.
+        model_override: Value passed to ``run(..., model=...)``; ``None`` when
+            unset. When set, ``model`` (effective) differs from
+            ``model_declared``.
+    """
+    effective_model = model_override if model_override is not None else spec.model
     manifest = {
         "artifact": artifact_dir.name,
         "run_id": run_dir.name,
         "timestamp": now.isoformat(timespec="seconds"),
         "artifact_md_sha256": spec.artifact_sha256,
         "executor": spec.executor,
-        "model": spec.model,
+        "model": effective_model,
+        "model_declared": spec.model,
+        "model_overridden": model_override is not None,
         "inputs": input_records,
         "params": resolved_params,
         "outputs": [o.name for o in spec.outputs],
