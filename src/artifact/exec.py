@@ -114,3 +114,17 @@ def deepagent_executor(*, spec: Spec, run_dir: Path, templated_body: str) -> Non
         backend=backend,
     )
     agent.invoke({"messages": [{"role": "user", "content": _USER_KICKOFF}]})
+
+
+def get_executor(spec: Spec) -> Executor:
+    """Return the executor callable for ``spec.executor``.
+
+    Spec validation already restricts ``spec.executor`` to the allowed set, so
+    this function is total for any ``Spec`` produced by ``parse_spec``.
+    """
+    if spec.executor == "claude_cli":
+        from artifact.claude_cli import claude_cli_executor
+        return claude_cli_executor
+    if spec.executor == "deepagent":
+        return deepagent_executor
+    raise ValueError(f"unknown executor {spec.executor!r}")

@@ -17,7 +17,7 @@ import sys
 
 from dotenv import find_dotenv, load_dotenv
 
-from artifact.exec import Executor, deepagent_executor
+from artifact.exec import Executor
 
 load_dotenv(find_dotenv(usecwd=True), override=False)
 
@@ -114,8 +114,9 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
 
     Args:
         argv: Argument list. ``None`` means read from ``sys.argv[1:]``.
-        executor: Optional ``Executor`` for ``run``. Defaults to
-            ``deepagent_executor`` (real LLM). Public injection seam for tests.
+        executor: Optional ``Executor`` for ``run``. ``None`` means the runner
+            resolves one via ``get_executor(spec)`` based on ``spec.executor``.
+            Public injection seam for tests.
 
     Returns:
         The process exit code.
@@ -137,7 +138,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
                 args.artifact_dir,
                 params=params,
                 inputs=inputs,
-                executor=executor or deepagent_executor,
+                executor=executor,
                 model=args.model,
             )
             if args.promote_as:

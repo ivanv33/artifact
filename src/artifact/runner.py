@@ -14,7 +14,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from artifact.exec import Executor, noop_executor
+from artifact.exec import Executor, get_executor
 from artifact.spec import Spec, parse_spec
 from artifact.template import render
 from artifact.timestamp import make_run_id
@@ -41,7 +41,9 @@ def run(
         inputs: Explicit input file paths, by declared input name. Each source
             file is copied to runs/<id>/in/<name>, SHA-256'd, and its absolute
             staged path made available to the template as {{ inputs.<name> }}.
-        executor: Callable satisfying ``Executor``. Defaults to ``noop_executor``.
+        executor: Callable satisfying ``Executor``. ``None`` means the runner
+            resolves one via ``get_executor(spec)`` based on ``spec.executor``.
+            Public injection seam for tests.
         model: Optional override for ``spec.model``. When set, the executor
             receives a spec whose ``model`` has been replaced with this value;
             the parsed spec's declared model is preserved for the manifest.
@@ -83,7 +85,8 @@ def run(
     spec_for_exec = (
         dataclasses.replace(spec, model=model) if model is not None else spec
     )
-    manifest_extra = (executor or noop_executor)(
+    resolved_executor = executor if executor is not None else get_executor(spec_for_exec)
+    manifest_extra = resolved_executor(
         spec=spec_for_exec, run_dir=run_dir, templated_body=templated_body
     )
 
