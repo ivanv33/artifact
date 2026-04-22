@@ -33,7 +33,7 @@ Two fields added, one field's semantics sharpen:
 
 ```json
 {
-  "model":            "claude_code:haiku",
+  "model":            "anthropic:claude-haiku-4-5",
   "model_declared":   "anthropic:claude-sonnet-4-6",
   "model_overridden": true
 }
@@ -73,8 +73,7 @@ No new integration test. The override changes a string, not dispatch behavior.
 - A `model:` override at promotion time.
 - An `ARTIFACT_MODEL` env default.
 - Per-param or per-step model routing.
-- A new executor. `executor: deepagent` remains the only executor in v0.2; `--model` only changes the string passed to it.
-- LangSmith wiring inside `artifact`. Enabling LangSmith for a `claude_code:` run is a Claude Code plugin concern (see `docs.langchain.com/langsmith/trace-claude-code`) — install the plugin and set `TRACE_TO_LANGSMITH=true` in the host env; traces attach to the `claude` process, not to `artifact`.
+- LangSmith wiring inside `artifact`. Enabling LangSmith for an `executor: claude_cli` run is a Claude Code plugin concern (see `docs.langchain.com/langsmith/trace-claude-code`) — install the plugin and set `TRACE_TO_LANGSMITH=true` in the host env; traces attach to the `claude` process, not to `artifact`.
 
 ## Open questions
 
