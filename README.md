@@ -50,6 +50,11 @@ GOOGLE_API_KEY=...        # for google_genai:... models
 ANTHROPIC_API_KEY=...     # for anthropic:... models
 ```
 
+For `claude_code:<name>` models, `artifact` shells out to your local `claude` CLI on a Pro/Max subscription — no API key needed. Requires:
+- `claude` on `$PATH` (`npm i -g @anthropic-ai/claude-code`)
+- An authenticated session (`claude /login`)
+- A real TTY (won't work backgrounded)
+
 The CLI auto-loads `.env` from the nearest parent directory (like `docker compose` or `aider`). Shell-exported env vars still win, so CI/Docker-injected secrets are never overridden.
 
 ## ARTIFACT.md
@@ -143,7 +148,7 @@ Outcome:
 ## Testing
 
 ```bash
-uv run pytest                    # 56 unit tests, no network, < 1 second
+uv run pytest                    # 60 unit tests, no network, < 1 second
 uv run pytest -m integration     # opt-in: real Gemini call, needs GOOGLE_API_KEY
 ```
 
