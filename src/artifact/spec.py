@@ -77,7 +77,10 @@ class Spec:
         path: Absolute path to the source ``ARTIFACT.md``.
         kind: Always ``"transform"`` in v0.2.
         executor: Always ``"deepagent"`` in v0.2.
-        model: Model identifier in ``provider:name`` form.
+        model: Model identifier. Under ``executor: deepagent`` this is a
+            ``provider:name`` string (required). Under ``executor: claude_cli``
+            it is a bare Claude model name (optional; when ``None`` the
+            ``claude`` CLI uses its own default).
         inputs: Declared inputs in source order.
         params: Declared params in source order.
         outputs: Declared outputs in source order.
@@ -88,7 +91,7 @@ class Spec:
     path: Path
     kind: str
     executor: str
-    model: str
+    model: str | None
     inputs: list[Input]
     params: list[Param]
     outputs: list[Output]
@@ -137,12 +140,23 @@ def parse_spec(path: str | Path) -> Spec:
             f"{path}: executor must be one of {sorted(_ALLOWED_EXECUTORS)}, got {executor!r}"
         )
 
-    model = _require_str(fm, "model", path)
-    if executor == "claude_cli" and ":" in model:
-        raise SpecError(
-            f"{path}: executor 'claude_cli' requires a bare Claude model name "
-            f"(no provider prefix); got {model!r}"
-        )
+    if executor == "claude_cli":
+        raw_model = fm.get("model")
+        if raw_model is None:
+            model = None
+        elif not isinstance(raw_model, str) or not raw_model:
+            raise SpecError(
+                f"{path}: 'model' must be a non-empty string if provided"
+            )
+        elif ":" in raw_model:
+            raise SpecError(
+                f"{path}: executor 'claude_cli' requires a bare Claude model "
+                f"name (no provider prefix); got {raw_model!r}"
+            )
+        else:
+            model = raw_model
+    else:
+        model = _require_str(fm, "model", path)
 
     inputs = [_parse_input(i, path) for i in fm.get("inputs") or []]
     params = [_parse_param(p, path) for p in fm.get("params") or []]

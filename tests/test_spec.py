@@ -98,3 +98,23 @@ def test_executor_claude_cli_rejects_colon_model(tmp_path):
     )
     with pytest.raises(SpecError, match="claude_cli"):
         parse_spec(p)
+
+
+def test_executor_claude_cli_allows_missing_model(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: claude_cli\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    spec = parse_spec(p)
+    assert spec.model is None
+
+
+def test_executor_deepagent_still_requires_model(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: deepagent\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    with pytest.raises(SpecError, match="model"):
+        parse_spec(p)
