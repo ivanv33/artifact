@@ -14,14 +14,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from artifact.errors import RunnerError
 from artifact.exec import Executor, get_executor
 from artifact.spec import Spec, parse_spec
 from artifact.template import render
 from artifact.timestamp import make_run_id
 
-
-class RunnerError(ValueError):
-    """Raised for any user-facing run failure (bad params, missing inputs, etc.)."""
+__all__ = ["RunnerError", "run"]
 
 
 def run(

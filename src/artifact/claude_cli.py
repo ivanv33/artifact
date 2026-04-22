@@ -15,7 +15,7 @@ import threading
 from pathlib import Path
 from typing import Callable, Iterable, TextIO
 
-from artifact.runner import RunnerError
+from artifact.errors import RunnerError
 from artifact.spec import Spec
 
 
