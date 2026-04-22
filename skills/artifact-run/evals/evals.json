@@ -1,0 +1,33 @@
+{
+  "skill_name": "artifact-run",
+  "evals": [
+    {
+      "id": 0,
+      "name": "run-trivial-param-only",
+      "prompt": "Please run the artifact at `tests/integration/fixtures/trivial-gemini/` with param topic=ocean. You have my approval to proceed — go ahead and execute the CLI.",
+      "expected_output": "The skill should read ARTIFACT.md, resolve that `topic` is the only required param (already supplied), and invoke `uv run artifact run tests/integration/fixtures/trivial-gemini/ --param topic=ocean`. A new timestamped run directory should appear under the fixture's `runs/`, and its `manifest.json` should have `params.topic == \"ocean\"`. The run's `out/haiku.md` should exist and be non-empty.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "stage-inline-input-via-mktemp",
+      "prompt": "Run the artifact at `skills/artifact-run/evals/fixtures/gemini-with-input/`. For the `topic.md` input, here's the content I want to use:\n\n```\n# Volcanoes\nVolcanoes are fascinating geological features that erupt from the Earth's mantle.\n```\n\nStage it into a tmp dir as instructed, then run. Approval granted — proceed.",
+      "expected_output": "The skill should create a tmp dir via `mktemp -d`, write the provided content to `<tmpdir>/topic.md` (exact filename matching the declared input), then invoke `uv run artifact run skills/artifact-run/evals/fixtures/gemini-with-input/ --input topic.md=<tmpdir>/topic.md`. A new run directory should appear under the fixture's `runs/`, with `in/topic.md` containing the provided markdown and `out/haiku.md` non-empty.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "refuse-to-run-with-missing-info",
+      "prompt": "Run the with-inputs artifact at `tests/fixtures/with-inputs/`.",
+      "expected_output": "The skill should NOT execute the CLI. The artifact declares `events.json` as a required input and `user` as a required param, neither of which were supplied. The skill should stop and ask the user for: (1) the events.json source (file path or inline content to stage), and (2) the value of the `user` param. It must not fabricate input content or guess a username. No new run directory should appear under `tests/fixtures/with-inputs/runs/`.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "generate-input-on-request",
+      "prompt": "Run the artifact at `skills/artifact-run/evals/fixtures/gemini-with-input/`. Generate the topic.md content for me — I want something about mountains. Show me what you wrote, then you're approved to run.",
+      "expected_output": "The skill should generate markdown content about mountains, show it to the user before running, stage it into a tmp dir via `mktemp -d` as `topic.md`, and label it as GENERATED (not user-supplied) in the confirmation summary. After that, invoke `uv run artifact run skills/artifact-run/evals/fixtures/gemini-with-input/ --input topic.md=<tmpdir>/topic.md`. A new run directory should appear with `in/topic.md` containing mountain-related content and `out/haiku.md` non-empty. The distinguishing signal from eval 1 is the explicit labeling of the input as generated/synthetic in the skill's confirmation output.",
+      "files": []
+    }
+  ]
+}

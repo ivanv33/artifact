@@ -1,5 +1,6 @@
 .worktrees/
 runs/
+skills/artifact-run-workspace/
 __pycache__/
 .venv/
 *.egg-info/
