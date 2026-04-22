@@ -1,9 +1,14 @@
-"""Executor protocol + the deepagents-backed default.
+"""Executor protocol + the deepagents-backed default + model resolver.
 
-``deepagent_executor`` is a thin adapter over the ``deepagents`` library. It is
-deliberately not unit-tested — its behavior is covered by the manual
+``deepagent_executor`` is a thin adapter over the ``deepagents`` library. It
+is deliberately not unit-tested — its behavior is covered by the manual
 verification step. All of our code reaching through the executor seam is
 tested via the ``Executor`` protocol with fakes in ``tests/test_runner.py``.
+
+``_resolve_chat_model`` is the one piece of executor-adjacent logic that
+*is* unit-tested, in ``tests/test_exec.py``: it is pure
+prefix-and-factory plumbing for the ``claude_code:`` adapter, with no
+LLM call inside.
 """
 
 from __future__ import annotations
@@ -101,7 +106,7 @@ def deepagent_executor(*, spec: Spec, run_dir: Path, templated_body: str) -> Non
     """
     backend = FilesystemBackend(root_dir=str(run_dir), virtual_mode=True)
     agent = create_deep_agent(
-        model=spec.model,
+        model=_resolve_chat_model(spec.model),
         system_prompt=templated_body,
         backend=backend,
     )
