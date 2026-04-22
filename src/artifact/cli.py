@@ -51,6 +51,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Map an input name to a file path. May be repeated.",
     )
     run.add_argument(
+        "--model",
+        dest="model",
+        default=None,
+        metavar="PROVIDER:NAME",
+        help="Override ARTIFACT.md's model for this run. Opaque to artifact.",
+    )
+    run.add_argument(
         "--promote-as",
         dest="promote_as",
         default=None,
@@ -120,6 +127,9 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
     args = parser.parse_args(argv)
 
     if args.cmd == "run":
+        if args.model is not None and args.model == "":
+            print("error: --model requires a non-empty string", file=sys.stderr)
+            return 1
         params = _split_kv(args.param, "--param")
         inputs = _split_kv(args.input, "--input")
         try:
@@ -128,6 +138,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
                 params=params,
                 inputs=inputs,
                 executor=executor or deepagent_executor,
+                model=args.model,
             )
             if args.promote_as:
                 promote_run(args.artifact_dir, run_dir.name, label=args.promote_as)
