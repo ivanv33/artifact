@@ -107,8 +107,10 @@ def test_create_rejects_invalid_content(tmp_path):
     dest = tmp_path / "x"
     with pytest.raises(SpecError):
         create(dest, content=bad)
-    # Critical property: no files written when validation fails.
-    assert not dest.exists() or list(dest.iterdir()) == []
+    # Critical property: dest was never created when validation fails.
+    # (Tighter than "empty or absent" — catches a refactor that mkdir's
+    # before validating.)
+    assert not dest.exists()
 
 
 def test_create_rejects_non_empty_dir(tmp_path):
@@ -148,4 +150,5 @@ def test_create_rejects_bare_filename_violation(tmp_path):
     dest = tmp_path / "x"
     with pytest.raises(SpecError, match="bare filename"):
         create(dest, content=bad)
-    assert not dest.exists() or list(dest.iterdir()) == []
+    # Validation fails before mkdir; dest was never created.
+    assert not dest.exists()

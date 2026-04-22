@@ -952,14 +952,14 @@ def create(dest: Path, *, content: str) -> Path:
     artifact_text = content if content.endswith("\n") else content + "\n"
     (dest / "ARTIFACT.md").write_text(artifact_text, encoding="utf-8")
     (dest / ".gitignore").write_text("runs/*\n", encoding="utf-8")
-    return dest.resolve()
+    return dest
 ```
 
 **Ordering matters:** validate first, *then* create the directory, *then* write. If validation fails, the target directory is never created — the "no partial state on invalid input" invariant from the DD's Errors table. The non-empty check runs before any write too; the "already-here" file in the test proves we don't clobber.
 
 **Why `FileExistsError` (not `SpecError`):** `SpecError` is for artifact-content validation. "Target dir is not empty" is a filesystem-state error, not a content error. `cli.py` (next stage) catches both `SpecError` and `OSError` (which `FileExistsError` subclasses) and prints each verbatim.
 
-**Return-value note:** The DD says `create` prints the path; keeping `dest.resolve()` here (rather than in `cli.py`) means the path seen by a pipe consumer is absolute, matching `artifact run`'s existing convention.
+**Return-value note:** Return `dest` as passed, not `dest.resolve()`. On macOS, `tmp_path` involves a `/var` → `/private/var` symlink that would make `returned == dest` fail in tests. Any path canonicalization (if needed) belongs in `cli.py`, which prints the returned value directly.
 
 - [ ] **Step 5.4: Run; verify all tests pass**
 
@@ -1038,7 +1038,7 @@ def test_create_cli_writes_files_on_valid_stdin(tmp_path, capsys):
     assert rc == 0
     out = capsys.readouterr().out.strip()
     # stdout is the resolved destination path.
-    assert out == str(dest.resolve())
+    assert out == str(dest)
     assert (dest / "ARTIFACT.md").read_text(encoding="utf-8") == content
     assert (dest / ".gitignore").read_text(encoding="utf-8") == "runs/*\n"
 
