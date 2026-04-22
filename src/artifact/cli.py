@@ -97,11 +97,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser(
         "template",
         help="Emit a reference ARTIFACT.md to stdout.",
+        description=(
+            "Print a reference ARTIFACT.md to stdout. Pipe to a file to scaffold "
+            "by hand, or pipe directly into `artifact create <dir>` for the "
+            "one-liner: artifact template | artifact create my-artifact"
+        ),
     )
 
     create_cmd = sub.add_parser(
         "create",
         help="Read ARTIFACT.md from stdin and scaffold <dir>.",
+        description=(
+            "Read an ARTIFACT.md from stdin, validate it, and write it plus "
+            "a runs/*-ignoring .gitignore into <dir>. stdin must be piped "
+            "(not a TTY). Typical use: artifact template | artifact create <dir>"
+        ),
     )
     create_cmd.add_argument(
         "dir",

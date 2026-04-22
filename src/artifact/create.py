@@ -160,8 +160,9 @@ sections, one per recommended model. Each section opens with a specific
 pick (year range + make + model + trim guidance), explains in one
 paragraph why it fits the caller's requirements, lists 3-5 bullets of
 what owners consistently report (good and bad) with inline source URLs,
-names the expected price band, and calls out 1-2 things to watch for
-when inspecting a specific listing at that age/mileage.
+names the expected price band (every core pick must fit within
+{{{{ params.max_budget_usd }}}}, out-the-door), and calls out 1-2 things
+to watch for when inspecting a specific listing at that age/mileage.
 
 **`out/candidates.json`** — the same picks in the structured schema
 described in the output declaration above. Every `source` must be a real
