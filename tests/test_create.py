@@ -32,10 +32,10 @@ def test_render_template_is_deterministic():
 def test_render_template_returns_str_with_frontmatter_and_body():
     text = render_template()
     assert text.startswith("---\n")
-    # Closing frontmatter delimiter is followed by a blank line then the body.
-    assert "\n---\n" in text
-    # Body is non-trivial.
-    assert len(text.split("\n---\n", 2)[2].strip()) > 0
+    # Split on the frontmatter-closing delimiter; body follows.
+    _, sep, body = text.partition("\n---\n")
+    assert sep == "\n---\n"
+    assert body.strip()
 
 
 def test_render_template_lists_every_allowed_value_in_comments():

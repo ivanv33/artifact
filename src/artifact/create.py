@@ -131,8 +131,6 @@ outputs:
 # "fetch the page"), not specific tool identifiers. Keeps the recipe
 # portable across executors; the agent picks the right tool at run time.
 
----
-
 You are recommending which cars the author of {{{{ inputs.requirements.md }}}}
 should SHORTLIST — the research that happens before they touch a listing
 site. You are not finding them a specific vehicle to buy. You are naming
