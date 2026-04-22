@@ -205,3 +205,41 @@ def test_param_name_with_slash_is_not_validated_by_filename_rule(tmp_path):
     )
     spec = parse_spec(p)
     assert spec.params[0].name == "a/b"
+
+
+@pytest.mark.parametrize(
+    "section,line",
+    [
+        ("input", "inputs:\n  - name: x.md\n    desc: a\n  - name: x.md\n    desc: b\n"),
+        ("output", "outputs:\n  - name: y.md\n    desc: a\n  - name: y.md\n    desc: b\n"),
+        ("param", "params:\n  - name: z\n    type: int\n    required: false\n    desc: a\n  - name: z\n    type: int\n    required: false\n    desc: b\n"),
+    ],
+)
+def test_duplicate_names_rejected(tmp_path, section, line):
+    from artifact.spec import SpecError, parse_spec
+
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: deepagent\nmodel: x\n"
+        + line
+        + ("outputs:\n  - name: o.md\n    desc: d\n" if section != "output" else "")
+        + "---\nbody"
+    )
+    with pytest.raises(SpecError, match=f"duplicate {section} name"):
+        parse_spec(p)
+
+
+def test_parse_spec_from_str_rejects_surrogate_content():
+    # Stdin read with surrogateescape can smuggle non-UTF-8 bytes into
+    # the Python string. Re-encoding those via .encode("utf-8") raises
+    # UnicodeEncodeError. We surface that as a SpecError at parse time
+    # instead of leaking a traceback.
+    from pathlib import Path
+    from artifact.spec import SpecError, parse_spec_from_str
+
+    bad = (
+        "---\nkind: transform\nexecutor: deepagent\nmodel: a:b\n"
+        "outputs:\n  - name: o.md\n    desc: d\n---\nbody \udcff\udcfe\n"
+    )
+    with pytest.raises(SpecError, match="non-UTF-8"):
+        parse_spec_from_str(bad, Path("<synth>"))

@@ -269,6 +269,28 @@ def test_create_cli_surfaces_spec_errors(tmp_path, capsys):
     assert not (tmp_path / "bad").exists()
 
 
+def test_create_cli_surfaces_non_utf8_content_cleanly(tmp_path, capsys):
+    # A user piping bytes that round-tripped through surrogateescape
+    # (e.g. because PYTHONIOENCODING=utf-8:surrogateescape on a broken
+    # pipe) must not see a Python traceback.
+    from artifact.cli import main
+
+    bad = (
+        "---\nkind: transform\nexecutor: deepagent\nmodel: a:b\n"
+        "outputs:\n  - name: o.md\n    desc: d\n---\nbody \udcff\udcfe\n"
+    )
+    rc = main(
+        ["create", str(tmp_path / "bad-encoding")],
+        stdin=_FakeStdin(bad, isatty=False),
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error: ")
+    assert "non-UTF-8" in err
+    assert "Traceback" not in err
+    assert not (tmp_path / "bad-encoding").exists()
+
+
 def test_create_cli_refuses_non_empty_dir(tmp_path, capsys):
     from artifact.cli import main
     from artifact.create import render_template

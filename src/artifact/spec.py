@@ -178,7 +178,15 @@ def parse_spec_from_str(content: str, path: Path) -> Spec:
     params = [_parse_param(p, path) for p in fm.get("params") or []]
     outputs = [_parse_output(o, path) for o in fm.get("outputs") or []]
 
-    sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    _require_unique_names([i.name for i in inputs], "input", path)
+    _require_unique_names([p.name for p in params], "param", path)
+    _require_unique_names([o.name for o in outputs], "output", path)
+
+    try:
+        content_bytes = content.encode("utf-8")
+    except UnicodeEncodeError as e:
+        raise SpecError(f"{path}: content contains non-UTF-8 bytes: {e}") from e
+    sha = hashlib.sha256(content_bytes).hexdigest()
 
     return Spec(
         path=path,
@@ -199,6 +207,18 @@ def _require_str(fm: dict, key: str, path: Path) -> str:
     if not isinstance(v, str) or not v:
         raise SpecError(f"{path}: required field {key!r} missing or not a non-empty string")
     return v
+
+
+def _require_unique_names(names: list[str], kind: str, path: Path) -> None:
+    """Reject duplicate ``name`` entries within an inputs/params/outputs list.
+
+    ``kind`` is "input", "param", or "output" for the error message.
+    """
+    seen: set[str] = set()
+    for n in names:
+        if n in seen:
+            raise SpecError(f"{path}: duplicate {kind} name: {n!r}")
+        seen.add(n)
 
 
 def _require_bare_filename(name: str, kind: str, path: Path) -> None:
