@@ -13,7 +13,9 @@ and have no CLI coupling — ``cli.py`` is responsible for stdin/argv.
 
 from __future__ import annotations
 
-from artifact.spec import ALLOWED_EXECUTORS, ALLOWED_KINDS, ALLOWED_PARAM_TYPES
+from pathlib import Path
+
+from artifact.spec import ALLOWED_EXECUTORS, ALLOWED_KINDS, ALLOWED_PARAM_TYPES, parse_spec_from_str
 
 
 def _render_allowed(values: set[str]) -> str:
@@ -181,3 +183,40 @@ price fits.
 Be specific. "Toyota RAV4" is not a pick; "2020-2022 RAV4 XLE or above
 (skip LE — cloth seats, no blind-spot monitor)" is a pick.
 """
+
+
+def create(dest: Path, *, content: str) -> Path:
+    """Validate ``content`` and scaffold an artifact directory at ``dest``.
+
+    Writes exactly two files: ``<dest>/ARTIFACT.md`` (the piped content,
+    with a trailing newline appended if missing) and ``<dest>/.gitignore``
+    containing ``runs/*\\n``.
+
+    Args:
+        dest: Destination directory. Created with parents if it does not
+            exist. Must be empty if it does exist.
+        content: Full ``ARTIFACT.md`` text. Must parse cleanly via
+            ``parse_spec_from_str`` — if not, raises before any file is
+            written.
+
+    Returns:
+        ``dest`` as passed by the caller.
+
+    Raises:
+        SpecError: If ``content`` fails parser validation. No files written.
+        FileExistsError: If ``dest`` exists and is not empty. No files written.
+        OSError: If the directory cannot be created (permissions, etc.).
+            No files written.
+    """
+    parse_spec_from_str(content, dest / "ARTIFACT.md")
+
+    if dest.exists():
+        if any(dest.iterdir()):
+            raise FileExistsError(f"{dest} is not empty")
+    else:
+        dest.mkdir(parents=True)
+
+    artifact_text = content if content.endswith("\n") else content + "\n"
+    (dest / "ARTIFACT.md").write_text(artifact_text, encoding="utf-8")
+    (dest / ".gitignore").write_text("runs/*\n", encoding="utf-8")
+    return dest
