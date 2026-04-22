@@ -16,7 +16,7 @@ import yaml
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.DOTALL)
 
 _ALLOWED_KINDS = {"transform"}
-_ALLOWED_EXECUTORS = {"deepagent"}
+_ALLOWED_EXECUTORS = {"deepagent", "claude_cli"}
 _ALLOWED_PARAM_TYPES = {"string", "int", "float", "bool"}
 
 

@@ -78,3 +78,13 @@ def test_artifact_sha256_is_computed():
     spec = parse_spec(FIXTURES / "trivial" / "ARTIFACT.md")
     assert len(spec.artifact_sha256) == 64
     assert all(c in "0123456789abcdef" for c in spec.artifact_sha256)
+
+
+def test_executor_claude_cli_accepted(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: claude_cli\nmodel: claude-sonnet-4-6\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    spec = parse_spec(p)
+    assert spec.executor == "claude_cli"
