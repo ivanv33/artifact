@@ -15,9 +15,9 @@ import yaml
 
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.DOTALL)
 
-_ALLOWED_KINDS = {"transform"}
-_ALLOWED_EXECUTORS = {"deepagent", "claude_cli"}
-_ALLOWED_PARAM_TYPES = {"string", "int", "float", "bool"}
+ALLOWED_KINDS = {"transform"}
+ALLOWED_EXECUTORS = {"deepagent", "claude_cli"}
+ALLOWED_PARAM_TYPES = {"string", "int", "float", "bool"}
 
 
 class SpecError(ValueError):
@@ -109,15 +109,31 @@ def parse_spec(path: str | Path) -> Spec:
         A validated ``Spec``.
 
     Raises:
-        SpecError: If frontmatter is missing, malformed, or violates the v0.2
-            rules (allowed kinds/executors/param types, required fields).
+        SpecError: On frontmatter/validation failure.
         OSError: If the file cannot be read.
     """
     path = Path(path)
     raw = path.read_bytes()
-    text = raw.decode("utf-8")
+    return parse_spec_from_str(raw.decode("utf-8"), path)
 
-    m = _FRONTMATTER_RE.match(text)
+
+def parse_spec_from_str(content: str, path: Path) -> Spec:
+    """Parse and validate ``ARTIFACT.md`` content already in memory.
+
+    Args:
+        content: Full ``ARTIFACT.md`` text (frontmatter + body).
+        path: Source path used in error messages and stored on the
+            returned ``Spec``. Pass a synthetic path (e.g. ``Path("<stdin>")``)
+            when the content did not come from a file.
+
+    Returns:
+        A validated ``Spec`` whose ``artifact_sha256`` is the SHA-256 of
+        the UTF-8-encoded ``content``.
+
+    Raises:
+        SpecError: On frontmatter/validation failure.
+    """
+    m = _FRONTMATTER_RE.match(content)
     if not m:
         raise SpecError(f"{path}: missing YAML frontmatter delimited by '---'")
 
@@ -131,13 +147,13 @@ def parse_spec(path: str | Path) -> Spec:
     body = m.group(2)
 
     kind = _require_str(fm, "kind", path)
-    if kind not in _ALLOWED_KINDS:
-        raise SpecError(f"{path}: kind must be one of {sorted(_ALLOWED_KINDS)}, got {kind!r}")
+    if kind not in ALLOWED_KINDS:
+        raise SpecError(f"{path}: kind must be one of {sorted(ALLOWED_KINDS)}, got {kind!r}")
 
     executor = _require_str(fm, "executor", path)
-    if executor not in _ALLOWED_EXECUTORS:
+    if executor not in ALLOWED_EXECUTORS:
         raise SpecError(
-            f"{path}: executor must be one of {sorted(_ALLOWED_EXECUTORS)}, got {executor!r}"
+            f"{path}: executor must be one of {sorted(ALLOWED_EXECUTORS)}, got {executor!r}"
         )
 
     if executor == "claude_cli":
@@ -145,9 +161,7 @@ def parse_spec(path: str | Path) -> Spec:
         if raw_model is None:
             model = None
         elif not isinstance(raw_model, str) or not raw_model:
-            raise SpecError(
-                f"{path}: 'model' must be a non-empty string if provided"
-            )
+            raise SpecError(f"{path}: 'model' must be a non-empty string if provided")
         elif ":" in raw_model:
             raise SpecError(
                 f"{path}: executor 'claude_cli' requires a bare Claude model "
@@ -162,7 +176,7 @@ def parse_spec(path: str | Path) -> Spec:
     params = [_parse_param(p, path) for p in fm.get("params") or []]
     outputs = [_parse_output(o, path) for o in fm.get("outputs") or []]
 
-    sha = hashlib.sha256(raw).hexdigest()
+    sha = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     return Spec(
         path=path,
@@ -198,9 +212,9 @@ def _parse_param(raw: object, path: Path) -> Param:
         raise SpecError(f"{path}: param entries must be mappings")
     name = _require_str(raw, "name", path)
     ptype = raw.get("type", "string")
-    if ptype not in _ALLOWED_PARAM_TYPES:
+    if ptype not in ALLOWED_PARAM_TYPES:
         raise SpecError(
-            f"{path}: param {name!r} has type {ptype!r}; must be one of {sorted(_ALLOWED_PARAM_TYPES)}"
+            f"{path}: param {name!r} has type {ptype!r}; must be one of {sorted(ALLOWED_PARAM_TYPES)}"
         )
     required = bool(raw.get("required", False))
     default = raw.get("default")

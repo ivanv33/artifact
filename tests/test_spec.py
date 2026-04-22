@@ -118,3 +118,42 @@ def test_executor_deepagent_still_requires_model(tmp_path):
     )
     with pytest.raises(SpecError, match="model"):
         parse_spec(p)
+
+
+def test_allowed_value_constants_are_public():
+    from artifact.spec import ALLOWED_KINDS, ALLOWED_EXECUTORS, ALLOWED_PARAM_TYPES
+    assert "transform" in ALLOWED_KINDS
+    assert "deepagent" in ALLOWED_EXECUTORS
+    assert "claude_cli" in ALLOWED_EXECUTORS
+    assert {"string", "int", "float", "bool"} <= ALLOWED_PARAM_TYPES
+
+
+def test_parse_spec_from_str_parses_inline_content():
+    from pathlib import Path
+    from artifact.spec import parse_spec_from_str
+
+    content = (
+        "---\n"
+        "kind: transform\n"
+        "executor: deepagent\n"
+        "model: anthropic:claude-sonnet-4-6\n"
+        "outputs:\n"
+        "  - name: o.md\n"
+        "    desc: d\n"
+        "---\n"
+        "body\n"
+    )
+    spec = parse_spec_from_str(content, Path("<inline>"))
+    assert spec.kind == "transform"
+    assert spec.executor == "deepagent"
+    assert spec.model == "anthropic:claude-sonnet-4-6"
+    assert spec.path == Path("<inline>")
+    assert [o.name for o in spec.outputs] == ["o.md"]
+
+
+def test_parse_spec_from_str_reports_path_in_error():
+    from pathlib import Path
+    from artifact.spec import SpecError, parse_spec_from_str
+
+    with pytest.raises(SpecError, match="<synth>"):
+        parse_spec_from_str("no frontmatter at all", Path("<synth>"))
