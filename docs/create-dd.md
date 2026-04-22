@@ -1,109 +1,87 @@
-# DD: `artifact create`
+# DD: `artifact template` + `artifact create`
 
-*Addendum to `artifact-dd.md` — adds one subcommand and one shipped example artifact.*
+*Addendum to `artifact-dd.md` — adds two parameter-free subcommands that compose via a Unix pipe.*
 
 ## Problem
 
 Two failure modes today:
 
-1. **Hand-written `ARTIFACT.md` files ship malformed.** YAML is unforgiving (a missing `desc:`, a stray tab, an unquoted `:` in a value), and the parser rejects them at run time, *after* the user has already shaped the rest of the directory in their head. The recipe should be valid by construction.
-2. **Agents have no clean way to scaffold one.** A Claude Code session that wants to spin up a new artifact has to either remember the full frontmatter shape and emit it via `Write` (error-prone, drifts from the parser) or be taught a multi-step ritual. A single CLI call that produces a parseable file is the right surface.
+1. **Hand-written `ARTIFACT.md` files ship malformed.** YAML is unforgiving (a missing `desc:`, a stray tab, an unquoted `:` in a value), and the parser rejects them at `run` time, *after* the user has already shaped the rest of the directory in their head. The recipe should be valid by construction — or at minimum, invalid ones should be rejected before a directory is written, not hours later when the first run fires.
+2. **Agents have no clean way to scaffold one.** A Claude Code session that wants to spin up a new artifact has to either remember the full frontmatter shape and emit it via `Write` (error-prone, drifts from the parser) or be taught a multi-step ritual. A single pipeable CLI is the right surface.
 
-The original DD said "a user can create an artifact with `mkdir` and an editor." That's still true. `create` adds a faster, parser-correct path for the people and agents that want one — without changing the underlying primitive.
+Secondary failure mode, specific to the `inputs`/`outputs` declarations:
+
+3. **`name:` is easy to misuse as a path.** The declared name is a bare filename (used as `runs/<id>/in/<name>`), but nothing in the parser today enforces that. A user or agent can write `name: /abs/path/mission.md` or `name: ../mission.md` and the parser accepts it; the error surfaces downstream in ways that don't point to the mistake. This is exactly the "caller passed a path thinking they were providing the file path" confusion we want to head off.
+
+The original DD said "a user can create an artifact with `mkdir` and an editor." That's still true. These commands add a parser-correct path for the people and agents that want one, and they harden `parse_spec` against the path-in-name foot-gun that affects both.
 
 ## Change
 
-One new subcommand:
+Two new subcommands. **Neither takes any flags.** The only argument anywhere is `create`'s positional `<dir>`.
 
 ```
-artifact create <dir>
-    [--model PROVIDER:NAME]    # set (or override) the declared model
-    [--example NAME]           # start from a shipped example artifact instead of the stub
-    [--body-file PATH]         # replace the body with the contents of PATH (use - for stdin)
-    [--force]                  # overwrite an existing ARTIFACT.md
+artifact template                      # emit a reference ARTIFACT.md to stdout
+artifact create <dir>                  # read ARTIFACT.md from stdin, validate, write
 ```
 
-Plus implicit stdin: when stdin is piped (`isatty(0) == False`), its contents replace the body, equivalent to `--body-file -`. When both implicit stdin and `--body-file` are set, `--body-file` wins.
+Intended usage:
 
-The directory is created if it does not exist. If `<dir>/ARTIFACT.md` already exists, the command exits 1 with `error: <dir>/ARTIFACT.md exists; pass --force to overwrite` unless `--force` is given. No `runs/`, `outs/`, or `.gitignore` is created — those are managed elsewhere (the runner creates `runs/` lazily; `.gitignore` is the surrounding repo's concern).
+```bash
+# One-liner: default reference into a new dir.
+artifact template | artifact create 1-my-thing
 
-Stdout: the path of the written artifact directory (the argument `<dir>`, made absolute). Matches `artifact run`'s convention of printing the thing you pass to the next command — `artifact run "$(artifact create foo)"` is the intended pipeline shape.
+# Edit-then-create: customize before writing.
+artifact template > /tmp/ARTIFACT.md
+$EDITOR /tmp/ARTIFACT.md
+artifact create 1-my-thing < /tmp/ARTIFACT.md
 
-### Two modes
-
-**Default (no `--example`):** emit a minimal stub. Required fields filled with sensible defaults; `inputs/params/outputs` present as empty lists with comments explaining what to add; body is a placeholder paragraph instructing the agent/user to describe the task. The result parses immediately. Supports the agent path (B+E from "Problem"): an agent runs `artifact create my-thing`, then edits the file or pipes a body.
-
-**With `--example NAME`:** copy a shipped, fully-functional artifact from `<package>/examples/<NAME>/` into `<dir>`. Inherits the example's frontmatter and body verbatim. `--model` overrides the declared model; `--body-file`/stdin overrides the body. Other fields (inputs, params, outputs) are inherited unchanged — the user edits the file afterward to specialize.
-
-## The default stub
-
-Generated for `artifact create my-thing` with no flags:
-
-```yaml
----
-# kind: shape of the artifact. v0.2 supports: transform
-kind: transform
-# executor: how the body is run. v0.2 supports: deepagent
-executor: deepagent
-# model: provider:name string handed to the executor.
-# Override per-run with `artifact run --model PROVIDER:NAME`.
-model: anthropic:claude-sonnet-4-6
-
-# inputs: declared input files this artifact consumes.
-# Each entry is { name: <basename>, desc: <prose> }.
-# The runner stages each input under runs/<id>/in/<name>; reference
-# them in the body as {{ inputs.<name> }} (resolves to an absolute path).
-inputs: []
-
-# params: declared scalar knobs.
-# Each entry is { name, type, required, default?, desc }.
-# type is one of: string | int | float | bool.
-# Reference in the body as {{ params.<name> }}.
-params: []
-
-# outputs: declared output files this artifact must produce in out/.
-# Missing outputs fail the run; undeclared extras are warned but allowed.
-# Each entry is { name: <basename>, desc: <prose> }.
-outputs: []
----
-
-TODO: describe the task. The deep agent reads this as its system prompt.
-Reference declared params with `{{ params.<name> }}` and declared inputs
-with `{{ inputs.<name> }}` (resolves to an absolute path on disk).
-```
-
-Notes on the comments:
-
-- **Allowed-value comments are computed**, not hardcoded. The strings `transform`, `deepagent`, and `string | int | float | bool` are interpolated from the parser's authoritative sets at render time (see "Sync with the parser" below). When the parser gains a new kind/executor, the stub's comments update automatically.
-- **Default model** is `anthropic:claude-sonnet-4-6` — matches the worked examples in the DD. Overridable via `--model`.
-- The body is intentionally one short paragraph. Agents who pipe a body via stdin replace it cleanly; humans who edit it have a one-line cue, not a wall to delete.
-
-## The hero example: `competitor-brief`
-
-Committed at `examples/competitor-brief/` in the repo. The DIKW digit prefix is intentionally dropped from shipped-with-the-package examples — the prefix is a convention for the *user's* artifact hierarchy, not for pedagogical material that lives outside it.
-
-A real, runnable artifact — not a template string. Single source of truth: `parse_spec` parses it, `artifact run` runs it, and `artifact create --example competitor-brief` copies it. The `--example` flag value matches the directory name verbatim.
-
-Why a competitor brief: it's recognizable knowledge work everyone has done by hand, and it naturally exercises every primitive — file inputs, multiple params, websearch + fetch tools, multiple outputs, and the "label per target" promotion pattern.
-
-Sketch (final wording produced during implementation):
-
-```yaml
+# Agent path: skip template entirely, just pipe the content.
+cat <<'EOF' | artifact create 1-my-thing
 ---
 kind: transform
 executor: deepagent
 model: anthropic:claude-sonnet-4-6
+---
+body here
+EOF
+```
+
+Design consequences of the no-flags rule:
+
+- **No `--model`.** Model is one line of YAML; change it by editing the piped content (or via `sed`/`yq` in the pipeline).
+- **No `--example`.** Until a second shipped example exists, `template`'s output *is* the example.
+- **No `--body-file`.** Body is part of stdin content; no precedence table.
+- **No `--force`.** `create` refuses to overwrite (see Errors).
+
+Each command does exactly one thing. `template` reads nothing and touches no filesystem; `create` has one input source (stdin) and one output shape (a dir with two files).
+
+## What `template` emits
+
+The full reference artifact — frontmatter + body — as a single UTF-8 stream to stdout. Exit 0, no stderr, no side effects.
+
+Content is a **competitor brief** — the DD's §Example 4 extended with an optional `focus` param and a `seed.md` input, chosen to exercise every declaration shape in one compact artifact (a declared input, one required + one optional param, two outputs in different formats). The `kind`, `executor`, and param `type` comment strings are interpolated at render time from the parser's authoritative constants (see Parser sync) so they can't drift.
+
+```yaml
+---
+# ARTIFACT.md — recipe + provenance container.
+# Convention: prefix the parent directory with a DIKW digit
+# (0- raw, 1- info, 2- knowledge, 3- wisdom). Not enforced.
+# Full reference: docs/artifact-dd.md
+
+kind: transform                        # one of: transform
+executor: deepagent                    # one of: claude_cli | deepagent
+model: anthropic:claude-sonnet-4-6     # provider:name under executor: deepagent; bare Claude model under executor: claude_cli (optional there)
 
 inputs:
   - name: seed.md
     desc: |
       Seed material — the target's own About/Pricing page text, a press
-      release, or any short document that anchors the brief in primary source.
-      Plain markdown.
+      release, or any short document that anchors the brief in primary
+      source. Plain markdown. `name:` must be a bare filename.
 
 params:
   - name: target
-    type: string
+    type: string                       # one of: bool | float | int | string
     required: true
     desc: Name of the company being briefed (e.g. "OpenAI").
   - name: focus
@@ -111,8 +89,8 @@ params:
     required: false
     default: general
     desc: |
-      Aspect to emphasize: "general", "pricing", "hiring", "engineering",
-      "go-to-market", etc. Free-form.
+      Aspect to emphasize: "general", "pricing", "hiring",
+      "engineering", "go-to-market", etc. Free-form.
 
 outputs:
   - name: brief.md
@@ -134,10 +112,10 @@ outputs:
 
 You are producing a competitor brief for {{ params.target }}.
 
-Start from {{ inputs.seed.md }} as primary source. Use the websearch and
-fetch tools to confirm and extend: company background, products, pricing
-posture, recent announcements, and anything relevant to the focus area
-"{{ params.focus }}".
+Start from {{ inputs.seed.md }} as primary source. Use the websearch
+and fetch tools to confirm and extend: company background, products,
+pricing posture, recent announcements, and anything relevant to the
+focus area "{{ params.focus }}".
 
 Write:
 - out/brief.md — narrative brief, one H2 per theme. Cite every claim
@@ -146,147 +124,158 @@ Write:
   output description above. Use null for fields you cannot confirm.
 ```
 
-Intended workflow that the README/tutorial walks through:
+Rationale for a functional reference (not a blank stub):
 
-```bash
-artifact create research --example competitor-brief
-# edit research/ARTIFACT.md if you want to change anything
-artifact run research/ \
-  --input seed.md=./openai-about.md \
-  --param target=OpenAI \
-  --promote-as openai
-```
+- **Every `desc:` is concrete prose.** A user editing "Seed material — the target's own About/Pricing page text…" into their own description writes better prose than a user filling in `desc: TODO`.
+- **Editing a working example is cheaper than filling blanks.** The blank-page problem applies to agents too. Given a full artifact, an agent rewriting it for a different task removes what it doesn't need and adapts what it does; given a stub, it has to invent the shape.
+- **`template | create` smoke-tests the full pipeline** on a fresh install: emit → pipe → parse → write → (optionally) `run`. If any link breaks, the one-liner surfaces it.
 
-Result: `research/outs/openai/` is a complete, committed brief with full provenance — exactly the thing the artifact primitive exists to make first-class.
+Trade-off accepted: the default pipeline (`artifact template | artifact create foo`) writes an opinionated artifact the user will edit. That's fine — delete is cheaper than invent, and an agent/user who wants something else pipes their own content through `create`.
 
-## Body input
+## How `create` works
 
-Order of precedence, highest wins:
+`artifact create <dir>` is a pure stdin→filesystem adapter:
 
-1. `--body-file PATH` (where `PATH = -` means read stdin).
-2. Implicit stdin (when `isatty(0) == False`).
-3. The body baked into the chosen mode (stub placeholder or example body).
+1. **Guard against the empty/TTY cases.** If `sys.stdin.isatty()`, exit 1 with a one-line hint pointing at the pipe idiom. If stdin is piped but reads zero bytes, exit 1 with `error: stdin is empty`.
+2. **Read stdin to a string.** UTF-8, no size limit (an ARTIFACT.md is kilobytes, not megabytes).
+3. **Validate via the parser.** Call `parse_spec_from_str(content, synthetic_path)` — a new sibling of `parse_spec` that skips the file read (see Wiring). If validation fails, exit 1 with the parser's own message, no files written. This is the critical property: `create` never writes an invalid ARTIFACT.md.
+4. **Guard the target directory.** `<dir>` is created if it does not exist. If `<dir>` exists and contains any entry → exit 1 with `error: <dir> is not empty`. No overwriting, no merge, no `--force`.
+5. **Write two files atomically enough.** `<dir>/ARTIFACT.md` gets the exact stdin content (trailing newline added if missing). `<dir>/.gitignore` gets one line: `runs/*`. Both are committed to disk before the command returns. If writing `ARTIFACT.md` fails mid-write, `<dir>` is left as-is (we don't pretend to offer crash-safe atomicity for a two-file write; `git status` will show the mess). Explicit non-feature.
+6. **Print the directory path and exit 0.** Same stdout convention as `artifact run` (prints the thing you pass to the next command).
 
-Notes:
+`create` does not write `runs/`, `outs/`, or `src/` — the runner creates `runs/` lazily, `outs/` is born from `promote`, and `src/` is a future-executor concern. `create` writes exactly two files.
 
-- Interactive users (`artifact create foo` typed into a terminal) hit case 3 — stdin is a TTY, no implicit consumption, no hang.
-- Agents that pipe (`echo "..." | artifact create foo`) hit case 2 — clean, no flag needed.
-- Heredocs (`artifact create foo <<'EOF' ... EOF`) hit case 2.
-- Reading from a real file (`artifact create foo < prompt.md`) hits case 2 via redirection — no separate flag for "read from file."
-- `--body-file -` is the explicit form of case 2, useful in scripts where the author wants the intent visible.
+## Parser sync + the bare-filename rule
 
-The body is inserted verbatim after the closing `---\n`. No trailing newline is appended if the body already ends with one; one is appended if it does not (so the file always ends in `\n`).
+Two validation hardenings land as part of this DD, both inside `spec.py` so `create` and `run` benefit equally.
 
-## Sync with the parser
+### 1. Shared allowed-value constants
 
-The risk: `create` hardcodes "transform | deepagent | string | int | float | bool" in its comments; the parser later grows a new kind/executor; comments lie.
-
-Fix in two parts:
-
-**1. Promote the parser's allowed-value sets to public constants.**
-
-In `src/artifact/spec.py`, rename the leading-underscore sets to public names (or, equivalently, lift them to a tiny `src/artifact/constants.py` and import from `spec.py` for backward compatibility within the package — same effect, slightly cleaner separation):
+`spec.py` currently holds `_ALLOWED_KINDS`, `_ALLOWED_EXECUTORS`, and `_ALLOWED_PARAM_TYPES` as module-private. Promote to public names:
 
 ```python
+# src/artifact/spec.py
 ALLOWED_KINDS = {"transform"}
-ALLOWED_EXECUTORS = {"deepagent"}
+ALLOWED_EXECUTORS = {"deepagent", "claude_cli"}
 ALLOWED_PARAM_TYPES = {"string", "int", "float", "bool"}
 ```
 
-`parse_spec` keeps using them for validation, unchanged. The `create` module imports them and interpolates into its rendered comments. New value added to the parser → next render of the stub picks it up automatically.
+`parse_spec` keeps using them unchanged. `template` imports them and interpolates their contents into the YAML comments it renders. When the set grows (as it did when `claude_cli` landed), `template`'s output updates automatically. No manual sync.
 
-**2. Round-trip test as the tripwire.**
+The `model:` field's comment is **not** driven purely from the constants: its validity rule is conditional on `executor` (`provider:name` under `deepagent`, bare name or omitted under `claude_cli`). The template's emitted `model:` line picks the `executor: deepagent` form because that's the default the reference uses; the YAML comment names the conditional rule in prose. A user who flips the template to `executor: claude_cli` edits the model line to suit, and `parse_spec` catches mistakes.
 
-Two unit tests guard the invariants:
+### 2. Bare-filename validation on `inputs[].name` and `outputs[].name`
+
+New rule in `parse_spec`: for every entry in `inputs` and `outputs`, the `name` field must be a bare filename. Reject any name containing `/`, equal to `.` or `..`, or with a path separator of any kind. The exact check:
 
 ```python
-def test_default_stub_parses(tmp_path):
-    create(tmp_path / "x")
-    spec = parse_spec(tmp_path / "x" / "ARTIFACT.md")
-    # Sanity: required fields populated, lists empty.
+def _require_bare_filename(name: str, kind: str, path: Path) -> None:
+    if "/" in name or name in (".", "..") or Path(name).name != name:
+        raise SpecError(
+            f"{path}: {kind} name must be a bare filename, got {name!r}"
+        )
+```
+
+Invoked from `_parse_input` and `_parse_output`. Not applied to `param.name` — params are identifiers, not filenames; they live in `params.json` keys and `{{ params.<name> }}` references. A separate identifier-validity rule for params is out of scope here (open question below).
+
+This catches the "I wrote `name: /abs/mission.md` thinking I was providing the file path" mistake at parse time. The error message points at the right field. Both `create` (via its in-memory `parse_spec` call) and `run` get the fix for free.
+
+### 3. Round-trip tripwire
+
+Two unit tests guard the sync invariants:
+
+```python
+def test_template_output_parses():
+    text = render_template()                        # no filesystem, pure str
+    spec = parse_spec_from_str(text, Path("<template>"))
     assert spec.kind in ALLOWED_KINDS
     assert spec.executor in ALLOWED_EXECUTORS
-    assert spec.inputs == [] and spec.params == [] and spec.outputs == []
+    assert len(spec.inputs) >= 1
+    assert len(spec.params) >= 1
+    assert len(spec.outputs) >= 1
 
-def test_stub_comments_list_every_allowed_value(tmp_path):
-    create(tmp_path / "x")
-    text = (tmp_path / "x" / "ARTIFACT.md").read_text()
+def test_template_comments_list_every_allowed_value():
+    text = render_template()
     for v in ALLOWED_KINDS | ALLOWED_EXECUTORS | ALLOWED_PARAM_TYPES:
         assert v in text, f"{v} missing from generated comments"
 ```
 
-The hero example does not need its own sync test because it IS a real artifact — the existing test suite already parses it via `parse_spec` (and an integration test optionally runs it).
+First test catches "template drifted to invalid YAML"; second catches "parser grew; template didn't."
 
 ## Wiring
 
-New file: `src/artifact/create.py`. One public function:
+- **New module `src/artifact/create.py`.** Two public functions:
+  ```python
+  def render_template() -> str: ...
+  def create(dest: Path, *, content: str) -> Path: ...
+  ```
+  `render_template` returns the reference ARTIFACT.md as a string, with YAML comments interpolated from `ALLOWED_*`. `create` validates `content` via the parser and writes the two files. Pure stdlib (`pathlib`). No stdin/argv handling in this module — that's `cli.py`'s job.
+- **`src/artifact/spec.py`.**
+  - Rename `_ALLOWED_KINDS` / `_ALLOWED_EXECUTORS` / `_ALLOWED_PARAM_TYPES` to public names. No in-tree consumer uses the private names.
+  - Add `_require_bare_filename` and call it from `_parse_input` and `_parse_output`.
+  - Add `parse_spec_from_str(content: str, path: Path) -> Spec` — the logic `parse_spec` already uses after reading bytes, factored out. `parse_spec` becomes a thin "read bytes + call `parse_spec_from_str`" wrapper. `create` calls `parse_spec_from_str` directly; no tempfile round-trip.
+- **`src/artifact/cli.py`.** Two new subparsers:
+  - `template` — no args, no flags. Calls `render_template()` and prints to stdout.
+  - `create` — one positional `dir`. Reads `sys.stdin`. TTY / empty-stdin guards before parsing. Calls `create(Path(dir), content=content)`. Prints the returned path on success.
+- **`tests/test_create.py`.** New file. Tests listed below.
+- **`tests/test_cli.py`** (if it exists; otherwise in-line in `test_cli.py`'s sibling): add CLI-level tests for the TTY guard and the empty-stdin guard.
 
-```python
-def create(
-    dest: Path,
-    *,
-    model: str | None = None,
-    example: str | None = None,
-    body: str | None = None,
-    force: bool = False,
-) -> Path:
-    """Write a new ARTIFACT.md under `dest`. Returns the written path."""
-```
-
-Pure stdlib (`pathlib`, `shutil`, plus the parser's constants). No I/O on stdin or argv — that lives in `cli.py`.
-
-Changes elsewhere:
-
-1. **`src/artifact/cli.py`**: add `create` subparser with the four flags above. Read implicit stdin via `sys.stdin.isatty()` + `sys.stdin.read()`. Validate `--model ""` the same way `run` does. When `--body-file` is given, it is the body source — implicit stdin is ignored without warning, and `--body-file -` resolves explicitly to stdin (the two equivalent ways to say "use stdin"). When `--body-file` is absent and stdin is piped, stdin is the body source.
-2. **`src/artifact/spec.py`**: rename `_ALLOWED_KINDS`/`_ALLOWED_EXECUTORS`/`_ALLOWED_PARAM_TYPES` to public names. Update internal references.
-3. **`examples/competitor-brief/ARTIFACT.md`**: new file, the hero. Committed.
-4. **`examples/` shipped with the package**: update `pyproject.toml` to include `examples/**` as package data so `artifact create --example competitor-brief` can find it after `pip install`/`uv pip install`. Resolve via `importlib.resources`.
-
-`README.md`: add a "Quick start" snippet using `artifact create … --example competitor-brief` as the lead example.
+Nothing in `runner.py`, `promote.py`, `exec.py`, `template.py`, or `introspect.py` changes.
 
 ## Errors
 
 | Condition | Exit | Stderr |
 |---|---|---|
-| `<dir>/ARTIFACT.md` exists, no `--force` | 1 | `error: <path> exists; pass --force to overwrite` |
-| `--model ""` | 1 | `error: --model requires a non-empty string` |
-| `--example NAME` where NAME is not shipped | 1 | `error: unknown example <NAME>; available: <list>` |
-| `--body-file PATH` where PATH does not exist (and is not `-`) | 1 | `error: --body-file: <path> not found` |
-| `<dir>` cannot be created (permission, etc.) | 1 | `error: <oserror message>` |
+| `artifact create <dir>` invoked with stdin as a TTY | 1 | `error: create reads ARTIFACT.md from stdin; try: artifact template \| artifact create <dir>` |
+| Stdin readable but empty | 1 | `error: stdin is empty` |
+| Stdin content fails `parse_spec` (any `SpecError`) | 1 | `error: <SpecError message>` (verbatim) |
+| `<dir>` exists and is non-empty | 1 | `error: <dir> is not empty` |
+| `<dir>` cannot be created (permissions, etc.) | 1 | `error: <OSError message>` |
 
-All errors print before any file is written. No partial state.
+All errors are raised *before* any file is written. No partial state.
 
 ## Testing
 
-Unit tests in `tests/test_create.py` (no network, fast):
+Unit, no network, no LLM calls:
 
-- Default stub is created, parses, has empty inputs/params/outputs.
-- Stub comments contain every value from the parser's allowed-value sets (the sync tripwire).
-- `--model X` produces a stub whose `spec.model == X`.
-- `--example competitor-brief` copies the hero verbatim; `parse_spec` succeeds; `--model X` overrides the declared model; `--body-file F` replaces the body.
-- Implicit stdin: feed a bytes string to a fake stdin → body equals that string.
-- `--body-file -` with stdin: body equals stdin.
-- `--body-file PATH`: body equals file contents.
-- Precedence: `--body-file PATH` beats piped stdin.
-- Error cases from the table above each have a test asserting exit code, stderr text, and that no file was written.
+**`template`:**
+- Output parses cleanly via `parse_spec_from_str`.
+- Output declares at least one input, one param, one output (smoke — protects against "template accidentally became empty").
+- Output contains every value in `ALLOWED_KINDS`, `ALLOWED_EXECUTORS`, `ALLOWED_PARAM_TYPES` as substrings (drift tripwire).
+- Rendering is deterministic (same call produces identical bytes).
 
-No new integration test. `create` does not call out to LLMs, the network, or any executor.
+**`create`:**
+- Piping `template`'s output to `create <tmp>/x` produces `<tmp>/x/ARTIFACT.md` (equal to the piped content) and `<tmp>/x/.gitignore` (exactly `runs/*\n`).
+- Invalid input (stdin contains malformed YAML, missing `kind`, unknown `executor`, etc.) → exit 1 with the parser's error message, no files written.
+- Non-empty target dir → exit 1, specific error message, no files written.
+- TTY stdin → exit 1 with the hint message, no files written.
+- Empty stdin → exit 1, no files written.
+
+**Bare-filename validation:**
+- `parse_spec` rejects `inputs[].name = "../x.md"`, `"/abs/x.md"`, `"sub/x.md"`, `"."`, `".."` with `SpecError` whose message names the offending field.
+- Same for `outputs[].name`.
+- `params[].name` unaffected (only inputs/outputs).
+
+**End-to-end pipeline:**
+- `artifact template | artifact create <tmp>/x` exits 0; `parse_spec(<tmp>/x/ARTIFACT.md)` succeeds.
+
+No integration test. Nothing here calls out to LLMs or the network.
 
 ## Non-goals
 
-- **Multiple shipped examples beyond the hero.** v0.2 ships `2-competitor-brief` only. Adding more (a paper summarizer, a weekly digest, etc.) is a follow-up — easy to do once the `--example` machinery exists, but not part of this DD.
-- **Project-level scaffolding.** `create` produces one artifact directory, not a parent repo with `.gitignore`, README, `pyproject.toml`, etc. The artifact is one directory; surrounding repo concerns are out of scope.
-- **Interactive wizard.** No prompts, no TUI. Flags + stdin only; the surface is identical for humans, scripts, and agents.
-- **Per-shape flags** (`--input-name X`, `--param-name Y`, `--output-name Z`). An earlier draft included these to let callers set declared shape from the CLI without editing the file. Dropping them: with `--example` available for "start from something concrete" and the stub default for "start from minimum, edit afterward," shape flags don't pay rent. Adding inputs/params/outputs is a one-line YAML edit; agents do that with `Edit` in two seconds. The validation idea attached to those flags (rejecting paths in `--input-name`) is retired with them.
-- **`artifact template` as a separate command.** Considered. Folded into `create`'s default behavior: the stub *is* the template. The generated file's comments are its documentation.
-- **Mutating an existing artifact.** `create --force` overwrites; it does not merge. There is no `artifact add-input` or `artifact set-model`. The file is small enough that editing it directly is faster than memorizing a CLI for it.
+- **Flags of any kind.** Covered above. If a future need arises, it lands as a separate flag-bearing subcommand rather than accreting onto these two.
+- **Multiple shipped examples / `--example NAME`.** `template` emits exactly one reference artifact in v0.2. Adding more becomes relevant only once a second genuinely distinct example is worth shipping; at that point the shape is `artifact template NAME` (positional) or a new `artifact templates list` command.
+- **Mutating an existing artifact.** `create` refuses non-empty directories. There is no `artifact add-input` or `artifact set-model`. Edit the YAML.
+- **Identifier validation on `params[].name`.** Out of scope for this DD. Tracked in Open questions.
+- **Ancestor `.gitignore` detection.** `create` always writes `runs/*` locally. Redundant when the artifact lives inside a repo with `runs/*` already ignored, correct when standalone. Not worth the complexity to detect and skip.
+- **Project-level scaffolding.** `create` produces one artifact directory — not a parent repo, not `pyproject.toml`, not a README.
 
 ## Open questions
 
 Not blocking; surfaced so they're not forgotten.
 
-- **Multiple examples.** When a second example is added, do we want a flat namespace (`--example weekly-digest`) or hierarchical (`--example digest/weekly`)? Trivial for two; matters at five. Defer until we have three.
-- **Listing examples.** `artifact create --list-examples`? `artifact examples`? Current answer: defer; until there are >2, the README is the catalog.
-- **Default model.** Hardcoded to `anthropic:claude-sonnet-4-6`. Could read `ARTIFACT_DEFAULT_MODEL` from the env. Not in v0.2 — one config knob is one config knob.
-- **DIKW prefix on `<dir>`.** The DD describes the `N-name/` convention but doesn't enforce it. `create` does not validate or auto-add the prefix. Could warn when `<dir>` is missing one (`hint: artifacts conventionally use a DIKW digit prefix; got "research"`); deferred — warnings users learn to ignore are worse than none, and the convention is informal.
-- **Should `create --example` snapshot the example's git SHA into the new artifact?** Provenance for "this was forked from `competitor-brief@<sha>`." Useful for "did this user start from the latest hero or a stale one?" Probably yes, eventually; out of scope for v0.2.
+- **Identifier validity for `params[].name`.** Today any string passes. A future rule — `[A-Za-z_][A-Za-z0-9_]*`, say — would match what `{{ params.<name> }}` can safely resolve. Out of scope here; the filename case is the one that stung.
+- **Listing / choosing examples.** When a second example ships, `template` gains a positional arg (`artifact template competitor-brief`) with the current content becoming the default. A separate `artifact templates` subcommand to list is also possible. Defer until there's a second.
+- **Default model knob.** Hardcoded to `anthropic:claude-sonnet-4-6` in the emitted template. Environment-variable override (`ARTIFACT_DEFAULT_MODEL`) is the obvious next knob. Not in v0.2; users can `sed` the pipe.
+- **DIKW prefix on `<dir>`.** The DD describes the `N-name/` convention but doesn't enforce it. `create` does not validate or auto-add the prefix; a warning ("hint: artifacts conventionally use a DIKW digit prefix") was considered and dropped — warnings users learn to ignore are worse than none.
+- **Provenance for "I started from template@<sha>".** Snapshotting the git SHA of `template`'s source into the created artifact would let you tell whether a user scaffolded from the latest or a stale version. Useful eventually; out of scope for v0.2.
