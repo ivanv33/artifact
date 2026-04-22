@@ -93,6 +93,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the artifact directory.",
     )
 
+    sub.add_parser(
+        "template",
+        help="Emit a reference ARTIFACT.md to stdout.",
+    )
+
     return parser
 
 
@@ -194,6 +199,12 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
         except (ValueError, OSError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
+        return 0
+
+    if args.cmd == "template":
+        from artifact.create import render_template
+
+        sys.stdout.write(render_template())
         return 0
 
     return 2

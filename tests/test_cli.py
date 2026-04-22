@@ -1,3 +1,5 @@
+import pytest
+
 from artifact.cli import build_parser, main
 
 
@@ -167,3 +169,36 @@ def test_run_cli_rejects_colon_override_under_claude_cli(tmp_path, capsys):
     assert rc == 1
     err = capsys.readouterr().err
     assert "bare Claude model name" in err
+
+
+def test_template_subcommand_prints_reference_to_stdout(capsys):
+    from artifact.cli import main
+
+    rc = main(["template"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    # Frontmatter delimiters present; body is non-empty.
+    assert captured.out.startswith("---\n")
+    assert "\nkind: transform" in captured.out
+    assert "requirements.md" in captured.out
+
+
+def test_template_subcommand_is_idempotent(capsys):
+    from artifact.cli import main
+
+    rc1 = main(["template"])
+    first = capsys.readouterr().out
+    rc2 = main(["template"])
+    second = capsys.readouterr().out
+    assert rc1 == 0 and rc2 == 0
+    assert first == second
+
+
+def test_template_subcommand_rejects_flags(capsys):
+    from artifact.cli import main
+
+    # argparse exits with SystemExit(2) for unknown flags.
+    with pytest.raises(SystemExit) as excinfo:
+        main(["template", "--model", "x"])
+    assert excinfo.value.code == 2
