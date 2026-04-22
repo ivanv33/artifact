@@ -47,28 +47,26 @@ When `--model` is absent: `model == model_declared`, `model_overridden: false`.
 
 A reader of a promoted `outs/<label>/manifest.json` can tell, without re-parsing the recipe, whether this label's output came from the recipe's declared model or a one-off override.
 
-## Claude Code CLI as a backend — deferred
+## Claude Code CLI as a backend
 
-Original intent: `--model claude_code:haiku` + the [`langchain-claude-code-cli`](https://pypi.org/project/langchain-claude-code-cli/) package would route the run through the local `claude` CLI on a Pro/Max subscription instead of a paid API key, with no code change in `artifact/`.
+**Shipped as of 2026-04-21.** `--model claude_code:<name>` now routes through a small adapter in `src/artifact/exec.py` (`_resolve_chat_model`) that detects the `claude_code:` prefix, strips it, and instantiates `langchain_claude_code.ChatClaudeCode(model=<tail>)` directly. The instance is passed to `create_deep_agent` — its signature is `model: str | BaseChatModel | None`, so an instance bypasses `init_chat_model` entirely. `langchain-claude-code-cli` is now a hard dependency.
 
-**That path does not work as of 2026-04-21.** Verified by manual test against `langchain-claude-code-cli==0.1.0` on `langchain==1.2.15`:
+### Why the adapter was needed (historical context)
+
+Verified by manual test against `langchain-claude-code-cli==0.1.0` on `langchain==1.2.15` before the adapter existed:
 
 - The package's `__init__.py` only exposes `ChatClaudeCode` as a class. It does **not** register `claude_code` with LangChain's `init_chat_model`.
 - LangChain's `_parse_model` (`.venv/.../langchain/chat_models/base.py`) only honors a `provider:` prefix when the provider is in `_BUILTIN_PROVIDERS`. `claude_code` is not in that set.
 - Resolution falls through to `_attempt_infer_model_provider`, which at `base.py:529` matches `model.lower().startswith("claude")` and returns `"anthropic"`.
-- Net effect: `claude_code:haiku` silently routes to `langchain_anthropic.ChatAnthropic`, which then fails on `Could not resolve authentication method` when no `ANTHROPIC_API_KEY` is set — surfacing the wrong error and hiding what actually went wrong.
+- Net effect (without the adapter): `claude_code:haiku` silently routed to `langchain_anthropic.ChatAnthropic`, which then failed on `Could not resolve authentication method` when no `ANTHROPIC_API_KEY` was set — surfacing the wrong error and hiding what actually went wrong.
 
-### What's needed to make it work
+The adapter sidesteps `init_chat_model` entirely for the `claude_code:` prefix and so does not depend on LangChain ever registering this provider.
 
-An adapter in `src/artifact/exec.py` that detects the `claude_code:` prefix, strips it, and instantiates `langchain_claude_code.ChatClaudeCode(model=<tail>, ...)` directly. Pass the **instance** to `create_deep_agent` — its signature is `model: str | BaseChatModel | None`, so an instance bypasses `init_chat_model` entirely. ~10 lines in the executor, plus the package as a dependency (optional extra or hard dep — TBD).
+### Supported providers
 
-Deferred until that adapter lands. Not blocking the rest of this feature.
+`--model` works for any provider `init_chat_model` already resolves — `anthropic:`, `google_genai:`, `openai:`, and peers — plus `claude_code:` via the adapter described above.
 
-### What works today
-
-`--model` works for any provider `init_chat_model` already resolves — `anthropic:`, `google_genai:`, `openai:`, and peers. That is what this feature ships with. The unit + integration tests cover it.
-
-### Requirements, once the adapter exists (inherited from the package)
+### Requirements for `claude_code:` (inherited from the package)
 
 - `claude` on `$PATH` (`npm i -g @anthropic-ai/claude-code`).
 - Authenticated session (`claude /login`).
