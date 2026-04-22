@@ -17,7 +17,7 @@ import sys
 
 from dotenv import find_dotenv, load_dotenv
 
-from artifact.exec import Executor, deepagent_executor
+from artifact.exec import Executor
 
 load_dotenv(find_dotenv(usecwd=True), override=False)
 
@@ -114,8 +114,9 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
 
     Args:
         argv: Argument list. ``None`` means read from ``sys.argv[1:]``.
-        executor: Optional ``Executor`` for ``run``. Defaults to
-            ``deepagent_executor`` (real LLM). Public injection seam for tests.
+        executor: Optional ``Executor`` for ``run``. ``None`` means the runner
+            resolves one via ``get_executor(spec)`` based on ``spec.executor``.
+            Public injection seam for tests.
 
     Returns:
         The process exit code.
@@ -130,6 +131,25 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
         if args.model == "":
             print("error: --model requires a non-empty string", file=sys.stderr)
             return 1
+        if args.model is not None and ":" in args.model:
+            # Pre-validate against claude_cli artifacts. We need the executor
+            # string, which requires parsing the spec. Failures here are
+            # converted to the same ``error: ...`` surface the runner uses.
+            from artifact.spec import SpecError, parse_spec
+            from pathlib import Path as _P
+            try:
+                _spec = parse_spec(_P(args.artifact_dir) / "ARTIFACT.md")
+            except (SpecError, OSError) as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 1
+            if _spec.executor == "claude_cli":
+                print(
+                    f"error: --model for executor: claude_cli requires a "
+                    f"bare Claude model name (no provider prefix); got "
+                    f"{args.model!r}",
+                    file=sys.stderr,
+                )
+                return 1
         params = _split_kv(args.param, "--param")
         inputs = _split_kv(args.input, "--input")
         try:
@@ -137,7 +157,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
                 args.artifact_dir,
                 params=params,
                 inputs=inputs,
-                executor=executor or deepagent_executor,
+                executor=executor,
                 model=args.model,
             )
             if args.promote_as:

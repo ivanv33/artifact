@@ -78,3 +78,43 @@ def test_artifact_sha256_is_computed():
     spec = parse_spec(FIXTURES / "trivial" / "ARTIFACT.md")
     assert len(spec.artifact_sha256) == 64
     assert all(c in "0123456789abcdef" for c in spec.artifact_sha256)
+
+
+def test_executor_claude_cli_accepted(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: claude_cli\nmodel: claude-sonnet-4-6\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    spec = parse_spec(p)
+    assert spec.executor == "claude_cli"
+
+
+def test_executor_claude_cli_rejects_colon_model(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: claude_cli\nmodel: anthropic:foo\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    with pytest.raises(SpecError, match="claude_cli"):
+        parse_spec(p)
+
+
+def test_executor_claude_cli_allows_missing_model(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: claude_cli\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    spec = parse_spec(p)
+    assert spec.model is None
+
+
+def test_executor_deepagent_still_requires_model(tmp_path):
+    p = tmp_path / "ARTIFACT.md"
+    p.write_text(
+        "---\nkind: transform\nexecutor: deepagent\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+    with pytest.raises(SpecError, match="model"):
+        parse_spec(p)

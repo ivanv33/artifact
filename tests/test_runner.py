@@ -231,11 +231,11 @@ def test_run_model_override_threads_to_executor(tmp_path):
         params={"user": "alice"},
         inputs={},
         executor=executor,
-        model="claude_code:haiku",
+        model="anthropic:claude-haiku-4-5",
     )
 
     assert len(executor.calls) == 1
-    assert executor.calls[0]["spec"].model == "claude_code:haiku"
+    assert executor.calls[0]["spec"].model == "anthropic:claude-haiku-4-5"
 
 
 def test_run_no_model_override_preserves_declared(tmp_path):
@@ -258,10 +258,32 @@ def test_run_manifest_records_override(tmp_path):
         params={"user": "alice"},
         inputs={},
         executor=executor,
-        model="claude_code:haiku",
+        model="anthropic:claude-haiku-4-5",
     )
 
     manifest = json.loads((run_dir / "manifest.json").read_text())
-    assert manifest["model"] == "claude_code:haiku"
+    assert manifest["model"] == "anthropic:claude-haiku-4-5"
     assert manifest["model_declared"] == "anthropic:claude-sonnet-4-6"
     assert manifest["model_overridden"] is True
+
+
+def test_run_merges_executor_returned_dict_into_manifest(tmp_path):
+    art = _copy_fixture("trivial", tmp_path)
+
+    class MergingExecutor:
+        def __call__(self, *, spec, run_dir, templated_body):
+            (run_dir / "out" / "hello.md").write_text("hi")
+            return {"claude_cli": {"session_id": "s1", "num_turns": 3}}
+
+    run_dir = run(art, params={}, inputs={}, executor=MergingExecutor())
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["claude_cli"] == {"session_id": "s1", "num_turns": 3}
+
+
+def test_run_accepts_executor_returning_none(tmp_path):
+    art = _copy_fixture("trivial", tmp_path)
+    executor = RecordingExecutor(outputs_to_write=["hello.md"])
+
+    run_dir = run(art, params={}, inputs={}, executor=executor)
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert "claude_cli" not in manifest

@@ -95,11 +95,11 @@ def test_run_cli_passes_model_override_to_runner(tmp_path):
         (run_dir / "out" / "hello.md").write_text("hi")
 
     rc = main(
-        ["run", str(art), "--model", "claude_code:haiku"],
+        ["run", str(art), "--model", "anthropic:claude-haiku-4-5"],
         executor=capturing_executor,
     )
     assert rc == 0
-    assert seen["model"] == "claude_code:haiku"
+    assert seen["model"] == "anthropic:claude-haiku-4-5"
 
 
 def test_run_cli_rejects_empty_model(tmp_path, capsys):
@@ -143,3 +143,27 @@ def test_run_cli_without_model_preserves_declared(tmp_path):
     from artifact.spec import parse_spec
     declared = parse_spec(art / "ARTIFACT.md").model
     assert seen["model"] == declared
+
+
+def test_run_cli_rejects_colon_override_under_claude_cli(tmp_path, capsys):
+    import shutil
+
+    from artifact.cli import main
+
+    art = tmp_path / "claude-cli-artifact"
+    art.mkdir()
+    (art / "ARTIFACT.md").write_text(
+        "---\nkind: transform\nexecutor: claude_cli\n"
+        "outputs:\n  - name: o\n    desc: d\n---\nbody"
+    )
+
+    def should_not_run(*, spec, run_dir, templated_body):
+        raise AssertionError("executor must not be invoked when override is invalid")
+
+    rc = main(
+        ["run", str(art), "--model", "anthropic:foo"],
+        executor=should_not_run,
+    )
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "bare Claude model name" in err

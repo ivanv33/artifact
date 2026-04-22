@@ -33,7 +33,7 @@ Two fields added, one field's semantics sharpen:
 
 ```json
 {
-  "model":            "claude_code:haiku",
+  "model":            "anthropic:claude-haiku-4-5",
   "model_declared":   "anthropic:claude-sonnet-4-6",
   "model_overridden": true
 }
@@ -47,32 +47,16 @@ When `--model` is absent: `model == model_declared`, `model_overridden: false`.
 
 A reader of a promoted `outs/<label>/manifest.json` can tell, without re-parsing the recipe, whether this label's output came from the recipe's declared model or a one-off override.
 
-## Claude Code CLI as a backend — deferred
+## Claude Code CLI as a backend
 
-Original intent: `--model claude_code:haiku` + the [`langchain-claude-code-cli`](https://pypi.org/project/langchain-claude-code-cli/) package would route the run through the local `claude` CLI on a Pro/Max subscription instead of a paid API key, with no code change in `artifact/`.
+Claude-subscription use is handled by the `executor: claude_cli` executor, not by a model prefix. An artifact that wants to run through the local `claude` CLI declares:
 
-**That path does not work as of 2026-04-21.** Verified by manual test against `langchain-claude-code-cli==0.1.0` on `langchain==1.2.15`:
+```yaml
+executor: claude_cli
+model: claude-sonnet-4-6   # optional
+```
 
-- The package's `__init__.py` only exposes `ChatClaudeCode` as a class. It does **not** register `claude_code` with LangChain's `init_chat_model`.
-- LangChain's `_parse_model` (`.venv/.../langchain/chat_models/base.py`) only honors a `provider:` prefix when the provider is in `_BUILTIN_PROVIDERS`. `claude_code` is not in that set.
-- Resolution falls through to `_attempt_infer_model_provider`, which at `base.py:529` matches `model.lower().startswith("claude")` and returns `"anthropic"`.
-- Net effect: `claude_code:haiku` silently routes to `langchain_anthropic.ChatAnthropic`, which then fails on `Could not resolve authentication method` when no `ANTHROPIC_API_KEY` is set — surfacing the wrong error and hiding what actually went wrong.
-
-### What's needed to make it work
-
-An adapter in `src/artifact/exec.py` that detects the `claude_code:` prefix, strips it, and instantiates `langchain_claude_code.ChatClaudeCode(model=<tail>, ...)` directly. Pass the **instance** to `create_deep_agent` — its signature is `model: str | BaseChatModel | None`, so an instance bypasses `init_chat_model` entirely. ~10 lines in the executor, plus the package as a dependency (optional extra or hard dep — TBD).
-
-Deferred until that adapter lands. Not blocking the rest of this feature.
-
-### What works today
-
-`--model` works for any provider `init_chat_model` already resolves — `anthropic:`, `google_genai:`, `openai:`, and peers. That is what this feature ships with. The unit + integration tests cover it.
-
-### Requirements, once the adapter exists (inherited from the package)
-
-- `claude` on `$PATH` (`npm i -g @anthropic-ai/claude-code`).
-- Authenticated session (`claude /login`).
-- TTY; won't work backgrounded.
+See `docs/claude-cli-executor-dd.md` for design and rationale. The former `model: claude_code:<name>` prefix (shipped 2026-04-21, removed same day) was replaced by this executor because the Python SDK chain it relied on was blocked by an upstream bug in `claude-code-sdk` 0.0.25 handling `rate_limit_event` messages from `claude` CLI ≥ 2.1.45.
 
 ## Testing
 
@@ -89,8 +73,7 @@ No new integration test. The override changes a string, not dispatch behavior.
 - A `model:` override at promotion time.
 - An `ARTIFACT_MODEL` env default.
 - Per-param or per-step model routing.
-- A new executor. `executor: deepagent` remains the only executor in v0.2; `--model` only changes the string passed to it.
-- LangSmith wiring inside `artifact`. Enabling LangSmith for a `claude_code:` run is a Claude Code plugin concern (see `docs.langchain.com/langsmith/trace-claude-code`) — install the plugin and set `TRACE_TO_LANGSMITH=true` in the host env; traces attach to the `claude` process, not to `artifact`.
+- LangSmith wiring inside `artifact`. Enabling LangSmith for an `executor: claude_cli` run is a Claude Code plugin concern (see `docs.langchain.com/langsmith/trace-claude-code`) — install the plugin and set `TRACE_TO_LANGSMITH=true` in the host env; traces attach to the `claude` process, not to `artifact`.
 
 ## Open questions
 
