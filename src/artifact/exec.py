@@ -31,25 +31,28 @@ _USER_KICKOFF = (
 class Executor(Protocol):
     """Callable protocol for running a templated artifact body."""
 
-    def __call__(self, *, spec: Spec, run_dir: Path, templated_body: str) -> None:
+    def __call__(
+        self, *, spec: Spec, run_dir: Path, templated_body: str
+    ) -> dict | None:
         """Execute the artifact, writing outputs under ``run_dir/out/``.
 
         Args:
             spec: The parsed artifact spec.
             run_dir: The run directory (with ``in/`` and ``out/`` already created).
             templated_body: The artifact body after ``render()`` substitution.
+
+        Returns:
+            An optional mapping of extra fields to merge into ``manifest.json``.
+            Return ``None`` (or equivalently ``{}``) when the executor has
+            nothing to record beyond what the runner already captures.
         """
         ...
 
 
-def noop_executor(*, spec: Spec, run_dir: Path, templated_body: str) -> None:
-    """No-op executor used only for scaffolding.
-
-    Args:
-        spec: Unused.
-        run_dir: Unused.
-        templated_body: Unused.
-    """
+def noop_executor(
+    *, spec: Spec, run_dir: Path, templated_body: str
+) -> None:
+    """No-op executor used only for scaffolding."""
     return None
 
 

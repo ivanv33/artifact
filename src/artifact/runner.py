@@ -83,7 +83,7 @@ def run(
     spec_for_exec = (
         dataclasses.replace(spec, model=model) if model is not None else spec
     )
-    (executor or noop_executor)(
+    manifest_extra = (executor or noop_executor)(
         spec=spec_for_exec, run_dir=run_dir, templated_body=templated_body
     )
 
@@ -97,6 +97,7 @@ def run(
         input_records=input_records,
         now=now,
         model_override=model,
+        manifest_extra=manifest_extra,
     )
 
     return run_dir
@@ -186,22 +187,11 @@ def _write_manifest(
     input_records: list[dict],
     now: datetime,
     model_override: str | None,
+    manifest_extra: dict | None = None,
 ) -> None:
-    """Write ``manifest.json`` capturing full run provenance.
-
-    Args:
-        run_dir: Run directory receiving ``manifest.json``.
-        spec: The parsed spec. ``spec.model`` is the declared model.
-        artifact_dir: Artifact root (for the ``artifact`` field).
-        resolved_params: Effective params after default merging.
-        input_records: Per-input manifest records (name/sha256/source).
-        now: Timestamp for the ``timestamp`` field.
-        model_override: Value passed to ``run(..., model=...)``; ``None`` when
-            unset. When set, ``model`` (effective) differs from
-            ``model_declared``.
-    """
+    """Write ``manifest.json`` capturing full run provenance."""
     effective_model = model_override if model_override is not None else spec.model
-    manifest = {
+    manifest: dict = {
         "artifact": artifact_dir.name,
         "run_id": run_dir.name,
         "timestamp": now.isoformat(timespec="seconds"),
@@ -215,6 +205,8 @@ def _write_manifest(
         "outputs": [o.name for o in spec.outputs],
         "promoted_to": [],
     }
+    if manifest_extra:
+        manifest.update(manifest_extra)
     (run_dir / "manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     )
