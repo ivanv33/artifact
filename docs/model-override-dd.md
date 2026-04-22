@@ -49,28 +49,14 @@ A reader of a promoted `outs/<label>/manifest.json` can tell, without re-parsing
 
 ## Claude Code CLI as a backend
 
-**Shipped as of 2026-04-21.** `--model claude_code:<name>` now routes through a small adapter in `src/artifact/exec.py` (`_resolve_chat_model`) that detects the `claude_code:` prefix, strips it, and instantiates `langchain_claude_code.ChatClaudeCode(model=<tail>)` directly. The instance is passed to `create_deep_agent` — its signature is `model: str | BaseChatModel | None`, so an instance bypasses `init_chat_model` entirely. `langchain-claude-code-cli` is now a hard dependency.
+Claude-subscription use is handled by the `executor: claude_cli` executor, not by a model prefix. An artifact that wants to run through the local `claude` CLI declares:
 
-### Why the adapter was needed (historical context)
+```yaml
+executor: claude_cli
+model: claude-sonnet-4-6   # optional
+```
 
-Verified by manual test against `langchain-claude-code-cli==0.1.0` on `langchain==1.2.15` before the adapter existed:
-
-- The package's `__init__.py` only exposes `ChatClaudeCode` as a class. It does **not** register `claude_code` with LangChain's `init_chat_model`.
-- LangChain's `_parse_model` (`.venv/.../langchain/chat_models/base.py`) only honors a `provider:` prefix when the provider is in `_BUILTIN_PROVIDERS`. `claude_code` is not in that set.
-- Resolution falls through to `_attempt_infer_model_provider`, which at `base.py:529` matches `model.lower().startswith("claude")` and returns `"anthropic"`.
-- Net effect (without the adapter): `claude_code:haiku` silently routed to `langchain_anthropic.ChatAnthropic`, which then failed on `Could not resolve authentication method` when no `ANTHROPIC_API_KEY` was set — surfacing the wrong error and hiding what actually went wrong.
-
-The adapter sidesteps `init_chat_model` entirely for the `claude_code:` prefix and so does not depend on LangChain ever registering this provider.
-
-### Supported providers
-
-`--model` works for any provider `init_chat_model` already resolves — `anthropic:`, `google_genai:`, `openai:`, and peers — plus `claude_code:` via the adapter described above.
-
-### Requirements for `claude_code:` (inherited from the package)
-
-- `claude` on `$PATH` (`npm i -g @anthropic-ai/claude-code`).
-- Authenticated session (`claude /login`).
-- TTY; won't work backgrounded.
+See `docs/claude-cli-executor-dd.md` for design and rationale. The former `model: claude_code:<name>` prefix (shipped 2026-04-21, removed same day) was replaced by this executor because the Python SDK chain it relied on was blocked by an upstream bug in `claude-code-sdk` 0.0.25 handling `rate_limit_event` messages from `claude` CLI ≥ 2.1.45.
 
 ## Testing
 

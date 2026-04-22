@@ -95,11 +95,11 @@ def test_run_cli_passes_model_override_to_runner(tmp_path):
         (run_dir / "out" / "hello.md").write_text("hi")
 
     rc = main(
-        ["run", str(art), "--model", "claude_code:haiku"],
+        ["run", str(art), "--model", "anthropic:claude-haiku-4-5"],
         executor=capturing_executor,
     )
     assert rc == 0
-    assert seen["model"] == "claude_code:haiku"
+    assert seen["model"] == "anthropic:claude-haiku-4-5"
 
 
 def test_run_cli_rejects_empty_model(tmp_path, capsys):

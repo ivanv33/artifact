@@ -50,10 +50,12 @@ GOOGLE_API_KEY=...        # for google_genai:... models
 ANTHROPIC_API_KEY=...     # for anthropic:... models
 ```
 
-For `claude_code:<name>` models, `artifact` shells out to your local `claude` CLI on a Pro/Max subscription — no API key needed. Requires:
+For Claude subscription auth (no API key), declare `executor: claude_cli` in your `ARTIFACT.md` instead of `executor: deepagent`. The CLI shells out to your local `claude` binary and uses your Pro/Max session. Requires:
 - `claude` on `$PATH` (`npm i -g @anthropic-ai/claude-code`)
 - An authenticated session (`claude /login`)
 - A real TTY (won't work backgrounded)
+
+See `docs/claude-cli-executor-dd.md` for details.
 
 The CLI auto-loads `.env` from the nearest parent directory (like `docker compose` or `aider`). Shell-exported env vars still win, so CI/Docker-injected secrets are never overridden.
 
@@ -148,7 +150,7 @@ Outcome:
 ## Testing
 
 ```bash
-uv run pytest                    # 60 unit tests, no network, < 1 second
+uv run pytest                    # 80 unit tests, no network, < 1 second
 uv run pytest -m integration     # opt-in: real Gemini call, needs GOOGLE_API_KEY
 ```
 
