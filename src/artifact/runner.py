@@ -6,6 +6,7 @@ The runner sequences: parse → resolve params → resolve inputs → create run
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import shutil
@@ -30,6 +31,7 @@ def run(
     inputs: dict[str, str],
     executor: Executor | None = None,
     now: datetime | None = None,
+    model: str | None = None,
 ) -> Path:
     """Execute one run of an artifact.
 
@@ -40,6 +42,9 @@ def run(
             file is copied to runs/<id>/in/<name>, SHA-256'd, and its absolute
             staged path made available to the template as {{ inputs.<name> }}.
         executor: Callable satisfying ``Executor``. Defaults to ``noop_executor``.
+        model: Optional override for ``spec.model``. When set, the executor
+            receives a spec whose ``model`` has been replaced with this value;
+            the parsed spec's declared model is preserved for the manifest.
         now: Override for the run's timestamp (used for ``run_id`` and manifest
             timestamp). Defaults to wall clock; tests pass a fixed datetime for
             deterministic run IDs.
@@ -75,7 +80,12 @@ def run(
     }
     templated_body = render(spec.body, params=resolved_params, inputs=input_paths)
 
-    (executor or noop_executor)(spec=spec, run_dir=run_dir, templated_body=templated_body)
+    spec_for_exec = (
+        dataclasses.replace(spec, model=model) if model is not None else spec
+    )
+    (executor or noop_executor)(
+        spec=spec_for_exec, run_dir=run_dir, templated_body=templated_body
+    )
 
     _verify_outputs(spec, run_dir)
 

@@ -218,3 +218,30 @@ def test_run_warns_on_undeclared_output(tmp_path, capsys):
     captured = capsys.readouterr()
     assert "surprise.txt" in captured.err
     assert "undeclared" in captured.err.lower()
+
+
+def test_run_model_override_threads_to_executor(tmp_path):
+    art = _copy_fixture("with-params", tmp_path)
+    executor = RecordingExecutor(outputs_to_write=["report.md"])
+
+    run(
+        art,
+        params={"user": "alice"},
+        inputs={},
+        executor=executor,
+        model="claude_code:haiku",
+    )
+
+    assert len(executor.calls) == 1
+    assert executor.calls[0]["spec"].model == "claude_code:haiku"
+
+
+def test_run_no_model_override_preserves_declared(tmp_path):
+    art = _copy_fixture("with-params", tmp_path)
+    executor = RecordingExecutor(outputs_to_write=["report.md"])
+
+    run(art, params={"user": "alice"}, inputs={}, executor=executor)
+
+    assert len(executor.calls) == 1
+    # The `with-params` fixture declares anthropic:claude-sonnet-4-6.
+    assert executor.calls[0]["spec"].model == "anthropic:claude-sonnet-4-6"
