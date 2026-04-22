@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None, *, executor: Executor | None = None) -> 
     args = parser.parse_args(argv)
 
     if args.cmd == "run":
-        if args.model is not None and args.model == "":
+        if args.model == "":
             print("error: --model requires a non-empty string", file=sys.stderr)
             return 1
         params = _split_kv(args.param, "--param")
