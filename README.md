@@ -35,13 +35,21 @@ Five invariants:
 
 ## Install
 
+From PyPI (`artf` is the distribution name):
+
+```bash
+uv tool install artf       # or: uvx artf <subcommand> for a one-shot run
+```
+
+For local development:
+
 ```bash
 git clone https://github.com/ivanv33/artifact
 cd artifact
 uv sync
 ```
 
-The `artifact` CLI is installed as a uv console script.
+Either install exposes two console scripts — `artf` and `artifact` — pointing to the same entry point. Use whichever you prefer; examples below use `artifact`.
 
 Put your LLM provider key in a `.env` at the repo root (or any parent directory of where you invoke `artifact`):
 
@@ -66,8 +74,8 @@ YAML frontmatter + markdown body. Example:
 ```yaml
 ---
 kind: transform                     # only `transform` in v0.2
-executor: deepagent                 # only `deepagent` in v0.2
-model: anthropic:claude-sonnet-4-6  # any langchain provider:model string
+executor: deepagent                 # `deepagent` or `claude_cli`
+model: anthropic:claude-sonnet-4-6  # any langchain provider:model string (required for deepagent; optional bare name for claude_cli)
 
 inputs:
   - name: events.json
@@ -151,10 +159,10 @@ Outcome:
 
 ```bash
 uv run pytest                    # 80 unit tests, no network, < 1 second
-uv run pytest -m integration     # opt-in: real Gemini call, needs GOOGLE_API_KEY
+uv run pytest -m integration     # opt-in: live calls; needs GOOGLE_API_KEY and/or `claude` on PATH
 ```
 
-The integration test skips cleanly without a key.
+Integration tests skip cleanly when their prerequisites are missing — the Gemini tests need `GOOGLE_API_KEY`, the `executor: claude_cli` tests need an authenticated `claude` CLI.
 
 ## What's not in v0.2
 
