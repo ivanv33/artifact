@@ -1,17 +1,17 @@
 ---
 name: artifact-run
-description: Use whenever the user wants to execute an artifact — a directory containing an ARTIFACT.md file (an LLM recipe with declared inputs, params, and outputs). Triggers on phrases like "run the X artifact", "execute 1-github-report", "let's run this artifact", or any request to invoke `artifact run` against a directory. Use this skill even when the user doesn't say the word "artifact" explicitly, as long as they're referencing a directory that has an ARTIFACT.md. The skill reads the frontmatter, collects param values and input sources from the user, stages any user-provided input content into a fresh tmp dir, shows the exact CLI command, and only invokes the artifact CLI after explicit confirmation.
+description: Use whenever the user wants to execute an artifact — a directory containing an ARTIFACT.md file (an LLM recipe with declared inputs, params, and outputs). Triggers on phrases like "run the X artifact", "execute 1-github-report", "let's run this artifact", or any request to invoke `artf run` / `artifact run` against a directory. Use this skill even when the user doesn't say the word "artifact" explicitly, as long as they're referencing a directory that has an ARTIFACT.md. The skill reads the frontmatter, collects param values and input sources from the user, stages any user-provided input content into a fresh tmp dir, shows the exact CLI command (`uvx artf run ...`), and only invokes the CLI after explicit confirmation.
 ---
 
 # artifact-run
 
-You are helping the user execute one run of an artifact. An **artifact** is a directory containing `ARTIFACT.md` (YAML frontmatter + prompt body) that declares required `inputs`, `params`, `model`, and `outputs`. The CLI is invoked as `uv run artifact run <dir> --input NAME=PATH ... --param NAME=VALUE ...`.
+You are helping the user execute one run of an artifact. An **artifact** is a directory containing `ARTIFACT.md` (YAML frontmatter + prompt body) that declares required `inputs`, `params`, `model`, and `outputs`. The CLI is invoked as `uvx artf run <dir> --input NAME=PATH ... --param NAME=VALUE ...` — `uvx` fetches the published `artf` package, so you can run it from any directory without needing a local checkout.
 
 Your job is to turn a vague "run X" into a correct, confirmed CLI invocation — without ever guessing at values the user hasn't supplied, and without running the command before the user approves it.
 
 ## Why this skill exists
 
-The `artifact` CLI is strict: every declared input must be passed as `--input name=path`, every required param as `--param name=value`, and the paths in `--input` must point at real files on disk. Users often have the data in their head, in a chat message, or sitting in a random location — not yet staged as files with the exact declared names. This skill handles that gap: it reads the contract from `ARTIFACT.md`, asks the user only what it actually needs, stages ad-hoc input content into a tmp dir via `mktemp -d`, and confirms the whole command before executing.
+The `artf` CLI is strict: every declared input must be passed as `--input name=path`, every required param as `--param name=value`, and the paths in `--input` must point at real files on disk. Users often have the data in their head, in a chat message, or sitting in a random location — not yet staged as files with the exact declared names. This skill handles that gap: it reads the contract from `ARTIFACT.md`, asks the user only what it actually needs, stages ad-hoc input content into a tmp dir via `mktemp -d`, and confirms the whole command before executing.
 
 If you skip confirmation, you risk spending API credits on a run with wrong params. If you guess inputs the user hasn't provided, you fabricate data. Both are bad. The skill's discipline is what makes it trustworthy.
 
@@ -88,7 +88,7 @@ Inputs:
 Model: anthropic:claude-sonnet-4-6 (from ARTIFACT.md)
 
 Command:
-  uv run artifact run <artifact-dir> \
+  uvx artf run <artifact-dir> \
     --input events.json=/Users/poplar/data/alice-events.json \
     --input mission.md=/tmp/artifact-run-abc123/mission.md \
     --param user=alice
@@ -105,12 +105,12 @@ If the user's initial request already contains pre-approval ("go ahead and run i
 Invoke via `Bash`:
 
 ```bash
-uv run artifact run <artifact-dir> --input ... --param ...
+uvx artf run <artifact-dir> --input ... --param ...
 ```
 
-Run from the repo root (or wherever `pyproject.toml` lives — `uv` finds the project automatically). If the user asked to promote the run, add `--promote-as <label>`. If they asked to override the model, add `--model <provider:name>`.
+`uvx` fetches the `artf` package from PyPI and runs it — no local checkout or `cd` needed. You can invoke it from anywhere; the artifact directory is resolved from the path argument. If the user asked to promote the run, add `--promote-as <label>`. If they asked to override the model, add `--model <provider:name>`.
 
-After it finishes, the CLI prints the run directory (something like `runs/<timestamp>/`). Surface that to the user along with the output file names so they know where to look.
+After it finishes, the CLI prints the run directory (something like `runs/<timestamp>/`) inside the artifact dir. Surface that to the user along with the output file names so they know where to look.
 
 If the CLI exits non-zero, relay the stderr verbatim — don't editorialize. The error messages are designed to be actionable.
 
@@ -136,12 +136,12 @@ If the user says "promote as alice" or "save this as the alice output" or simila
 - **Don't skip confirmation** even on what looks like a trivial run. The user may have a reason for asking you to run something — the cost of confirming is small; the cost of a wrong run is API spend and a polluted runs/ history.
 - **Don't run the prompt body yourself.** You're invoking the CLI, not executing the artifact. The CLI handles the LLM call.
 - **Don't invent params or inputs not declared in frontmatter.** The CLI will reject them anyway.
-- **Don't cd into the artifact dir to run.** `uv run` resolves the project from `pyproject.toml`; pass the artifact dir as an argument instead.
+- **Don't cd into the artifact dir to run.** `uvx artf` is a self-contained invocation — pass the artifact dir as an argument from wherever you are.
 
 ## Quick reference: the CLI flags
 
 ```
-uv run artifact run <artifact-dir>
+uvx artf run <artifact-dir>
     [--input NAME=PATH]...     # repeat for each declared input
     [--param NAME=VALUE]...    # repeat for each param you set
     [--model PROVIDER:NAME]    # override ARTIFACT.md's model
