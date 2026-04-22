@@ -56,3 +56,68 @@ def test_build_argv_omits_model_flag_when_none():
         kickoff="go",
     )
     assert "--model" not in argv
+
+
+import io
+
+from artifact.claude_cli import _consume_stream
+
+
+def test_consume_stream_forwards_assistant_text():
+    buf = io.StringIO()
+    lines = [
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"hello"}]}}\n',
+        '{"type":"result","session_id":"s1","num_turns":1,"duration_ms":10,'
+        '"total_cost_usd":0.01,"model":"haiku"}\n',
+    ]
+    r = _consume_stream(lines, stdout=buf)
+    assert "hello" in buf.getvalue()
+    assert r is not None
+    assert r["session_id"] == "s1"
+
+
+def test_consume_stream_renders_tool_use_summary():
+    buf = io.StringIO()
+    lines = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use",'
+        '"id":"t1","name":"Write","input":{"file_path":"out/haiku.md"}}]}}\n',
+        '{"type":"result"}\n',
+    ]
+    _consume_stream(lines, stdout=buf)
+    assert "[Write]" in buf.getvalue()
+
+
+def test_consume_stream_returns_none_when_no_result_event():
+    buf = io.StringIO()
+    lines = [
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"a"}]}}\n',
+    ]
+    assert _consume_stream(lines, stdout=buf) is None
+
+
+def test_consume_stream_tolerates_malformed_json(capsys):
+    buf = io.StringIO()
+    lines = [
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"a"}]}}\n',
+        'not json\n',
+        '{"type":"result"}\n',
+    ]
+    r = _consume_stream(lines, stdout=buf)
+    assert "a" in buf.getvalue()
+    assert r is not None
+    err = capsys.readouterr().err
+    assert "non-JSON" in err
+
+
+def test_consume_stream_skips_unknown_and_rate_limit_events():
+    buf = io.StringIO()
+    lines = [
+        '{"type":"future_event","data":"whatever"}\n',
+        '{"type":"rate_limit_event","reset_at":"2026-05-01"}\n',
+        '{"type":"system","subtype":"init"}\n',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"x"}]}}\n',
+        '{"type":"result"}\n',
+    ]
+    r = _consume_stream(lines, stdout=buf)
+    assert buf.getvalue().strip() == "x"
+    assert r is not None
