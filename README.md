@@ -103,6 +103,7 @@ Template variables available in the body:
 artifact run <artifact-dir>
     [--input NAME=PATH]...     # repeat for each declared input
     [--param NAME=VALUE]...    # repeat for each param you set
+    [--model PROVIDER:NAME]    # override ARTIFACT.md's model for this run
     [--promote-as LABEL]       # also copy the run to outs/<LABEL>/
 
 # Promote an existing run to a label after the fact
@@ -142,7 +143,7 @@ Outcome:
 ## Testing
 
 ```bash
-uv run pytest                    # 50 unit tests, no network, < 1 second
+uv run pytest                    # 56 unit tests, no network, < 1 second
 uv run pytest -m integration     # opt-in: real Gemini call, needs GOOGLE_API_KEY
 ```
 
