@@ -16,7 +16,7 @@ from artifact.cli import main
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.forked]
 
 # Override and declared are the same model on purpose: one API key, minimum
 # cost, minimum drift risk. The decisive wire-check is ``model_overridden is

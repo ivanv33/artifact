@@ -18,7 +18,7 @@ from artifact.runner import run
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.forked]
 
 
 @pytest.fixture(autouse=True)

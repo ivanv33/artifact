@@ -28,6 +28,7 @@ module-name = "artifact"
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-forked>=1.6.0",
 ]
 
 [tool.pytest.ini_options]
@@ -36,4 +37,5 @@ testpaths = ["tests"]
 addopts = ["--import-mode=importlib", "-m", "not integration"]
 markers = [
     "integration: tests that call a real LLM (opt-in via `pytest -m integration`); require GOOGLE_API_KEY in .env",
+    "forked: run each test in its own forked subprocess (via pytest-forked). Required for integration tests because langchain-google-genai's httpx client reuses stale pooled connections across consecutive LLM calls in the same process.",
 ]
