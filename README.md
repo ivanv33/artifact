@@ -111,6 +111,24 @@ Template variables available in the body:
 - `{{ params.<name> }}` — the resolved param value.
 - `{{ inputs.<name> }}` — the absolute path to the staged input in `runs/<id>/in/<name>`.
 
+## Scaffolding a new artifact
+
+The parser rejects malformed `ARTIFACT.md` files, and a blank page is unfriendly. Two parameter-free subcommands compose via a Unix pipe to skip both problems:
+
+```bash
+# One-liner: a fully-formed reference artifact as a starting point.
+artifact template | artifact create 3-car-shortlist
+
+# Edit before writing.
+artifact template > /tmp/ARTIFACT.md
+$EDITOR /tmp/ARTIFACT.md
+artifact create 3-car-shortlist < /tmp/ARTIFACT.md
+```
+
+`artifact template` prints a complete reference `ARTIFACT.md` (frontmatter + body) to stdout. The allowed-value comments next to `kind:`, `executor:`, and param `type:` are sourced from the parser's own constants, so they can't drift.
+
+`artifact create <dir>` reads `ARTIFACT.md` from stdin, validates it via the same parser `run` uses, and writes two files: `<dir>/ARTIFACT.md` (the piped content) and `<dir>/.gitignore` (`runs/*`). Validation failures abort *before* any file is written — `<dir>` is never created if the content is invalid. `<dir>` must be empty if it exists; there is no `--force`.
+
 ## Commands
 
 ```bash
@@ -129,9 +147,17 @@ artifact runs <artifact-dir>
 
 # Show ARTIFACT.md frontmatter and current outs/ labels
 artifact show <artifact-dir>
+
+# Print a reference ARTIFACT.md to stdout
+artifact template
+
+# Read ARTIFACT.md from stdin and scaffold <dir>
+artifact create <dir>
 ```
 
-Each command exits with a non-zero code and prints `error: <msg>` to stderr on expected failures (bad params, missing inputs, malformed frontmatter, missing declared outputs).
+Each command exits with a non-zero code and prints `error: <msg>` to stderr on expected failures (bad params, missing inputs, malformed frontmatter, missing declared outputs). No traceback leaks on user-input errors.
+
+**Output verification.** After the executor returns, `artifact run` checks that every declared output in `ARTIFACT.md`'s `outputs:` list exists in the run's `out/` directory. A missing output fails the run with exit code 1 — the manifest is not finalized and the run is not promoted. Extras in `out/` (files the executor wrote that aren't declared) are printed as warnings but don't fail the run.
 
 ## Example
 
@@ -158,13 +184,13 @@ Outcome:
 ## Testing
 
 ```bash
-uv run pytest                    # 80 unit tests, no network, < 1 second
+uv run pytest                    # 126 unit tests, no network, < 1 second
 uv run pytest -m integration     # opt-in: live calls; needs GOOGLE_API_KEY and/or `claude` on PATH
 ```
 
 Integration tests skip cleanly when their prerequisites are missing — the Gemini tests need `GOOGLE_API_KEY`, the `executor: claude_cli` tests need an authenticated `claude` CLI.
 
-## What's not in v0.2
+## What's not in v0.3
 
 Deliberately deferred to a future version (per the design doc):
 
