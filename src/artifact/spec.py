@@ -85,7 +85,9 @@ class Spec:
         params: Declared params in source order.
         outputs: Declared outputs in source order.
         body: The prose body after the YAML frontmatter.
-        artifact_sha256: SHA-256 of the raw ``ARTIFACT.md`` bytes, for provenance.
+        artifact_sha256: SHA-256 of the UTF-8-encoded ``ARTIFACT.md`` content,
+            for provenance. Byte-identical to the file's raw bytes for any
+            well-formed UTF-8 source file.
     """
 
     path: Path
