@@ -11,5 +11,7 @@ outputs:
     desc: A three-line haiku on the topic.
 ---
 
-Write a three-line haiku about {{ params.topic }} to `out/haiku.md`.
-Do not output anything else. The file must exist and be non-empty.
+Use the Write tool to create the file `out/haiku.md` containing a three-line
+haiku about {{ params.topic }}. The Write tool call is mandatory — do not
+respond with the haiku as chat text; the file must exist on disk when you
+finish.
