@@ -129,6 +129,15 @@ artifact create 3-car-shortlist < /tmp/ARTIFACT.md
 
 `artifact create <dir>` reads `ARTIFACT.md` from stdin, validates it via the same parser `run` uses, and writes two files: `<dir>/ARTIFACT.md` (the piped content) and `<dir>/.gitignore` (`runs/*`). Validation failures abort *before* any file is written — `<dir>` is never created if the content is invalid. `<dir>` must be empty if it exists; there is no `--force`.
 
+## Claude skills
+
+Two Claude Code skills ship with this repo to make `create` and `run` less ceremonial:
+
+- [`skills/artifact-create/`](skills/artifact-create/SKILL.md) — turns a natural-language description ("scaffold an artifact that filters rental listings under $3000 in a few zip codes") into a drafted `ARTIFACT.md` via `artifact template`, picks a DIKW prefix, confirms, and pipes into `artifact create`. Focuses on specifying inputs, outputs, and the algorithm that maps one to the other.
+- [`skills/artifact-run/`](skills/artifact-run/SKILL.md) — takes a vague "run X" and turns it into a correct `artifact run` invocation. Reads the declared inputs/params, stages ad-hoc content into a tmp dir when needed, and confirms the full command before executing.
+
+Both skills are opt-in (Claude Code reads them from `skills/` when they're relevant) and have eval suites under each skill's `evals/` directory.
+
 ## Commands
 
 ```bash
