@@ -58,6 +58,21 @@ model: claude-sonnet-4-6   # optional
 
 See `docs/claude-cli-executor-dd.md` for design and rationale. The former `model: claude_code:<name>` prefix (shipped 2026-04-21, removed same day) was replaced by this executor because the Python SDK chain it relied on was blocked by an upstream bug in `claude-code-sdk` 0.0.25 handling `rate_limit_event` messages from `claude` CLI ≥ 2.1.45.
 
+### Live output streaming
+
+`claude_cli_executor` parses `--output-format stream-json` line-by-line and flushes each assistant-text and tool-use block to `sys.stdout` as it arrives (`_consume_stream` in `claude_cli.py`). In practice, output still appears as a single dump at subprocess exit: the `claude` CLI block-buffers its own stdout when it detects a pipe instead of a TTY, so nothing reaches our reader until the child flushes at exit. Our flush discipline is correct; the buffering is upstream.
+
+A PTY (`pty.openpty()`) would make the child see a terminal and emit line-buffered output. Not adopted in v0.3 because the tradeoffs outweigh the UX win:
+
+- **Unix-only** — `pty` is not portable to Windows.
+- **stderr merging** — a single PTY combines stdout and stderr; keeping them separate needs two PTYs or a mixed PTY-pipe setup.
+- **TTY translations** — default `onlcr` rewrites `\n` to `\r\n`, which would break our line-delimited JSON parser unless we put the slave fd into raw mode via `termios.tcsetattr`.
+- **ANSI escapes** — `claude` may emit color/cursor codes once it believes it's on a terminal, polluting stream-json output or our forwarded text.
+- **Test seam** — the current `popen_factory` injection point (used by `tests/test_claude_cli.py`) doesn't cover the PTY path; a new seam would be needed.
+- **More fd plumbing** — manual `select`/`read` loops, EOF signaled via `OSError`, explicit close of both master and slave.
+
+Deferred. Users who want live streaming today can run `claude` directly outside `artifact`; the executor's value is provenance (manifest + staged inputs + verified outputs), not terminal UX.
+
 ## Testing
 
 Unit tests via a fake `Executor` (per MEMORY.md — inject, don't monkeypatch):
